@@ -68,7 +68,7 @@
 
 -- Library init
     getgenv().library = {
-        directory = "milenium",
+        directory = "sportsclub",
         folders = {
             "/fonts",
             "/configs",
@@ -82,7 +82,11 @@
 
     local themes = {
         preset = {
-            accent = rgb(155, 150, 219),
+            accent = rgb(17, 0, 255),
+            window = rgb(14, 14, 16),
+            section = rgb(22, 22, 24),
+            text = rgb(245, 245, 245),
+            muted = rgb(72, 72, 73),
         }, 
 
         utility = {
@@ -91,6 +95,20 @@
                 TextColor3 = {}, 
                 ImageColor3 = {}, 
                 ScrollBarImageColor3 = {} 
+            },
+            window = {
+                BackgroundColor3 = {},
+            },
+            section = {
+                BackgroundColor3 = {},
+            },
+            text = {
+                TextColor3 = {},
+            },
+            muted = {
+                TextColor3 = {},
+                ImageColor3 = {},
+                ScrollBarImageColor3 = {},
             },
         }
     }
@@ -187,9 +205,9 @@
             return getcustomasset(Name .. ".font");
         end
         
-        local Medium = Register_Font("Medium", 200, "Normal", {
-            Id = "Medium.ttf",
-            Font = game:HttpGet("https://github.com/i77lhm/storage/raw/refs/heads/main/fonts/Inter_28pt-Medium.ttf"),
+        local Medium = Register_Font("MadeBold", 400, "Normal", {
+            Id = "MadeBold.ttf",
+            Font = game:HttpGet("https://raw.githubusercontent.com/ccrrrr1/V3/main/Fonts/Made_Bold%20(1).otf"),
         })
 
         local SemiBold = Register_Font("SemiBold", 200, "Normal", {
@@ -197,9 +215,21 @@
             Font = game:HttpGet("https://github.com/i77lhm/storage/raw/refs/heads/main/fonts/Inter_28pt-SemiBold.ttf"),
         })
 
+        local function make_font(asset_path, weight, style, fallback)
+            local success, result = pcall(function()
+                return Font.new(asset_path, weight, style)
+            end)
+
+            if success and result then
+                return result
+            end
+
+            return fallback
+        end
+
         fonts = {
-            small = Font.new(Medium, Enum.FontWeight.Regular, Enum.FontStyle.Normal);
-            font = Font.new(SemiBold, Enum.FontWeight.Regular, Enum.FontStyle.Normal);
+            small = make_font(Medium, Enum.FontWeight.Regular, Enum.FontStyle.Normal, Font.fromEnum(Enum.Font.ArialBold));
+            font = make_font(SemiBold, Enum.FontWeight.Regular, Enum.FontStyle.Normal, Font.fromEnum(Enum.Font.Arial));
         }
     end
 --
@@ -376,7 +406,7 @@
             local list = {}
             
             for idx, file in listfiles(library.directory .. "/configs") do
-                local name = file:gsub(library.directory .. "/configs\\", ""):gsub(".cfg", ""):gsub(library.directory .. "\\configs\\", "")
+                local name = file:match("([^\\/]+)%.cfg$")
                 list[#list + 1] = name
             end
 
@@ -432,12 +462,11 @@
         end
 
         function library:update_theme(theme, color)
-            for _, property in themes.utility[theme] do 
-
-                for m, object in property do 
-                    if object[_] == themes.preset[theme] then 
-                        object[_] = color 
-                    end 
+            for property_name, property in themes.utility[theme] do 
+                for _, object in property do 
+                    if object and object.Parent then
+                        object[property_name] = color
+                    end
                 end 
             end 
 
@@ -496,8 +525,8 @@
     -- Library element functions
         function library:window(properties)
             local cfg = { 
-                suffix = properties.suffix or properties.Suffix or "tech";
-                name = properties.name or properties.Name or "nebula";
+                suffix = properties.suffix or properties.Suffix or "sports";
+                name = properties.name or properties.Name or "club";
                 game_name = properties.gameInfo or properties.game_info or properties.GameInfo or "Milenium for Counter-Strike: Global Offensive";
                 size = properties.size or properties.Size or dim2(0, 700, 0, 600);
                 selected_tab;
@@ -530,8 +559,8 @@
                     Position = dim2(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2);
                     BorderColor3 = rgb(0, 0, 0);
                     BorderSizePixel = 0;
-                    BackgroundColor3 = rgb(14, 14, 16)
-                }); items[ "main" ].Position = dim2(0, items[ "main" ].AbsolutePosition.X, 0, items[ "main" ].AbsolutePosition.Y)
+                    BackgroundColor3 = themes.preset.window
+                }); library:apply_theme(items[ "main" ], "window", "BackgroundColor3"); items[ "main" ].Position = dim2(0, items[ "main" ].AbsolutePosition.X, 0, items[ "main" ].AbsolutePosition.Y)
                 
                 library:create( "UICorner" , {
                     Parent = items[ "main" ];
@@ -653,9 +682,9 @@
                     BorderColor3 = rgb(0, 0, 0);
                     Size = dim2(1, -196, 1, -81);
                     BorderSizePixel = 0;
-                    BackgroundColor3 = rgb(14, 14, 16);
+                    BackgroundColor3 = themes.preset.window;
                     ZIndex = 2;
-                });                
+                }); library:apply_theme(items[ "global_fade" ], "window", "BackgroundColor3");                
 
                 library:create( "UICorner" , {
                     Parent = items[ "shadow" ];
@@ -690,7 +719,7 @@
                 items[ "game" ] = library:create( "TextLabel" , {
                     FontFace = fonts.font;
                     Parent = items[ "info" ];
-                    TextColor3 = rgb(72, 72, 73);
+                    TextColor3 = themes.preset.muted;
                     BorderColor3 = rgb(0, 0, 0);
                     Text = cfg.game_name;
                     Name = "\0";
@@ -703,7 +732,7 @@
                     AutomaticSize = Enum.AutomaticSize.XY;
                     TextSize = 14;
                     BackgroundColor3 = rgb(255, 255, 255)
-                }); 
+                }); library:apply_theme(items[ "game" ], "muted", "TextColor3");
                 
                 items[ "other_info" ] = library:create( "TextLabel" , {
                     Parent = items[ "info" ];
@@ -1201,8 +1230,8 @@
                     BorderColor3 = rgb(0, 0, 0);
                     Size = dim2(1, -2, 1, -2);
                     BorderSizePixel = 0;
-                    BackgroundColor3 = rgb(22, 22, 24)
-                });
+                    BackgroundColor3 = themes.preset.section
+                }); library:apply_theme(items[ "inline" ], "section", "BackgroundColor3");
                 
                 library:create( "UICorner" , {
                     Parent = items[ "inline" ];
@@ -1291,7 +1320,7 @@
                 
                 items[ "section_title" ] = library:create( "TextLabel" , {
                     FontFace = fonts.font;
-                    TextColor3 = rgb(255, 255, 255);
+                    TextColor3 = themes.preset.text;
                     BorderColor3 = rgb(0, 0, 0);
                     Text = cfg.name;
                     Parent = items[ "button" ];
@@ -1304,7 +1333,7 @@
                     AutomaticSize = Enum.AutomaticSize.X;
                     TextSize = 16;
                     BackgroundColor3 = rgb(255, 255, 255)
-                });
+                }); library:apply_theme(items[ "section_title" ], "text", "TextColor3");
                 
                 library:create( "Frame" , {
                     AnchorPoint = vec2(0, 1);
@@ -3550,7 +3579,7 @@
 
         function library:init_config(window) 
             window:seperator({name = "Settings"})
-            local main = window:tab({name = "Configs", tabs = {"Main"}})
+            local main, ui_tab = window:tab({name = "Configs", tabs = {"Main", "UI"}})
             
             local column = main:column({})
             local section = column:section({name = "Configs", size = 1, default = true, icon = "rbxassetid://139628202576511"})
@@ -3559,11 +3588,35 @@
             local column = main:column({})
             local section = column:section({name = "Settings", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
             section:textbox({name = "Config name:", flag = "config_name_text"})
-            section:button({name = "Save", callback = function() writefile(library.directory .. "/configs/" .. flags["config_name_text"] or flags["config_name_list"] .. ".cfg", library:get_config()) library:update_config_list() notifications:create_notification({name = "Configs", info = "Saved config to:\n" .. flags["config_name_list"] or flags["config_name_text"]}) end}) 
+            section:button({name = "Save",callback = function()
+            local name = flags["config_name_text"] ~= "" and flags["config_name_text"] or flags["config_name_list"]
+            local path = library.directory .. "/configs/" .. name .. ".cfg"
+            writefile(path, library:get_config())
+            library:update_config_list()
+            notifications:create_notification({
+            name = "Configs",
+            info = "Saved config to:\n" .. name
+            })
+            end
+            })
             section:button({name = "Load", callback = function() library:load_config(readfile(library.directory .. "/configs/" .. flags["config_name_list"] .. ".cfg"))  library:update_config_list() notifications:create_notification({name = "Configs", info = "Loaded config:\n" .. flags["config_name_list"]}) end})
             section:button({name = "Delete", callback = function() delfile(library.directory .. "/configs/" .. flags["config_name_list"] .. ".cfg")  library:update_config_list() notifications:create_notification({name = "Configs", info = "Deleted config:\n" .. flags["config_name_list"]}) end})
-            section:colorpicker({name = "Menu Accent", callback = function(color, alpha) library:update_theme("accent", color) end, color = themes.preset.accent})
-            section:keybind({name = "Menu Bind", callback = function(bool) window.toggle_menu(bool) end, default = true})
+            section:colorpicker({name = "Menu Accent", flag = "menu_accent_color", callback = function(color, alpha) library:update_theme("accent", color) end, color = themes.preset.accent})
+            section:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.LeftControl, callback = function(bool) window.toggle_menu(bool) end, default = true})
+
+            local ui_column = ui_tab:column({})
+            local ui_section = ui_column:section({name = "UI Customization", size = 1, default = true, icon = "rbxassetid://129380150574313"})
+            ui_section:colorpicker({name = "Window Color", flag = "menu_window_color", callback = function(color, alpha) library:update_theme("window", color) end, color = themes.preset.window})
+            ui_section:colorpicker({name = "Section Color", flag = "menu_section_color", callback = function(color, alpha) library:update_theme("section", color) end, color = themes.preset.section})
+            ui_section:colorpicker({name = "Text Color", flag = "menu_text_color", callback = function(color, alpha) library:update_theme("text", color) end, color = themes.preset.text})
+            ui_section:colorpicker({name = "Muted Color", flag = "menu_muted_color", callback = function(color, alpha) library:update_theme("muted", color) end, color = themes.preset.muted})
+            ui_section:button({name = "Reset UI Colors", callback = function()
+                library:update_theme("accent", rgb(17, 0, 255))
+                library:update_theme("window", rgb(14, 14, 16))
+                library:update_theme("section", rgb(22, 22, 24))
+                library:update_theme("text", rgb(245, 245, 245))
+                library:update_theme("muted", rgb(72, 72, 73))
+            end})
         end
     --
 
