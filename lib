@@ -262,7 +262,7 @@
             local og_size = frame.Size  
 
             Frame.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if library:is_primary_input(input) then
                     resizing = true
                     start = input.Position
                     start_size = frame.Size
@@ -270,13 +270,13 @@
             end)
 
             Frame.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if library:is_primary_input(input) then
                     resizing = false
                 end
             end)
 
             library:connection(uis.InputChanged, function(input, game_event) 
-                if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+                if resizing and library:is_pointer_movement(input) then
                     local viewport_x = camera.ViewportSize.X
                     local viewport_y = camera.ViewportSize.Y
 
@@ -324,13 +324,21 @@
             return (y_cond and x_cond)
         end
 
+        function library:is_primary_input(input)
+            return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+        end
+
+        function library:is_pointer_movement(input)
+            return input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch
+        end
+
         function library:draggify(frame)
             local dragging = false 
             local start_size = frame.Position
             local start 
 
             frame.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if library:is_primary_input(input) then
                     dragging = true
                     start = input.Position
                     start_size = frame.Position
@@ -338,13 +346,13 @@
             end)
 
             frame.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if library:is_primary_input(input) then
                     dragging = false
                 end
             end)
 
             library:connection(uis.InputChanged, function(input, game_event) 
-                if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                if dragging and library:is_pointer_movement(input) then
                     local viewport_x = camera.ViewportSize.X
                     local viewport_y = camera.ViewportSize.Y
 
@@ -2018,13 +2026,20 @@
                 cfg.callback(flags[cfg.flag])
             end
 
+            items[ "slider" ].InputBegan:Connect(function(input)
+                if library:is_primary_input(input) then
+                    cfg.dragging = true
+                    library:tween(items[ "value" ], {TextColor3 = rgb(255, 255, 255)}, Enum.EasingStyle.Quad, 0.2)
+                end
+            end)
+
             items[ "slider" ].MouseButton1Down:Connect(function()
                 cfg.dragging = true 
                 library:tween(items[ "value" ], {TextColor3 = rgb(255, 255, 255)}, Enum.EasingStyle.Quad, 0.2)
             end)
 
             library:connection(uis.InputChanged, function(input)
-                if cfg.dragging and input.UserInputType == Enum.UserInputType.MouseMovement then 
+                if cfg.dragging and library:is_pointer_movement(input) then 
                     local size_x = (input.Position.X - items[ "slider" ].AbsolutePosition.X) / items[ "slider" ].AbsoluteSize.X
                     local value = ((cfg.max - cfg.min) * size_x) + cfg.min
                     cfg.set(value)
@@ -2032,7 +2047,7 @@
             end)
 
             library:connection(uis.InputEnded, function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if library:is_primary_input(input) then
                     cfg.dragging = false
                     library:tween(items[ "value" ], {TextColor3 = rgb(72, 72, 73)}, Enum.EasingStyle.Quad, 0.2) 
                 end 
@@ -2919,29 +2934,58 @@
             end)
 
             uis.InputChanged:Connect(function(input)
-                if (dragging_sat or dragging_hue or dragging_alpha) and input.UserInputType == Enum.UserInputType.MouseMovement then
+                if (dragging_sat or dragging_hue or dragging_alpha) and library:is_pointer_movement(input) then
                     cfg.update_color() 
                 end
             end)
 
             library:connection(uis.InputEnded, function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if library:is_primary_input(input) then
                     dragging_sat = false
                     dragging_hue = false
                     dragging_alpha = false
                 end
             end)    
 
+            items[ "alpha_gradient" ].InputBegan:Connect(function(input)
+                if library:is_primary_input(input) then
+                    dragging_alpha = true 
+                end
+            end)
             items[ "alpha_gradient" ].MouseButton1Down:Connect(function()
                 dragging_alpha = true 
             end)
             
+            items[ "hue_gradient" ].InputBegan:Connect(function(input)
+                if library:is_primary_input(input) then
+                    dragging_hue = true 
+                end
+            end)
             items[ "hue_gradient" ].MouseButton1Down:Connect(function()
                 dragging_hue = true 
             end)
             
+            items[ "sat" ].InputBegan:Connect(function(input)
+                if library:is_primary_input(input) then
+                    dragging_sat = true  
+                end
+            end)
             items[ "sat" ].MouseButton1Down:Connect(function()
                 dragging_sat = true  
+            end)
+
+            library:connection(uis.InputChanged, function(input)
+                if (dragging_sat or dragging_hue or dragging_alpha) and library:is_pointer_movement(input) then
+                    cfg.update_color() 
+                end
+            end)
+
+            library:connection(uis.InputEnded, function(input)
+                if library:is_primary_input(input) then
+                    dragging_sat = false
+                    dragging_hue = false
+                    dragging_alpha = false
+                end
             end)
 
             items[ "input" ].FocusLost:Connect(function()
