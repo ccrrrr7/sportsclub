@@ -72,7 +72,7 @@
         folders = {
             "/fonts",
             "/configs",
-            "/styles",
+            "/styling",
         },
         flags = {},
         config_flags = {},
@@ -429,7 +429,7 @@
 
             local list = {}
 
-            for idx, file in listfiles(library.directory .. "/styles") do
+            for idx, file in listfiles(library.directory .. "/styling") do
                 local name = file:match("([^\\/]+)%.cfg$")
                 if name then
                     list[#list + 1] = name
@@ -464,7 +464,7 @@
                 return false, "missing style name"
             end
 
-            writefile(library.directory .. "/styles/" .. name .. ".cfg", library:get_style())
+            writefile(library.directory .. "/styling/" .. name .. ".cfg", library:get_style())
             library:update_style_list()
 
             return true
@@ -475,7 +475,7 @@
                 return false, "missing style name"
             end
 
-            local path = library.directory .. "/styles/" .. name .. ".cfg"
+            local path = library.directory .. "/styling/" .. name .. ".cfg"
             if not isfile(path) then
                 return false, "style file missing"
             end
@@ -491,7 +491,7 @@
                 return false, "missing style name"
             end
 
-            local path = library.directory .. "/styles/" .. name .. ".cfg"
+            local path = library.directory .. "/styling/" .. name .. ".cfg"
             if not isfile(path) then
                 return false, "style file missing"
             end
@@ -3725,7 +3725,7 @@
             end
 
             local column = main:column({})
-            local section = column:section({name = "Configs", size = 1, default = true, icon = "rbxassetid://139628202576511"})
+            local section = column:section({name = "Configurations", size = 1, default = true, icon = "rbxassetid://139628202576511"})
             config_holder = section:list({options = {}, callback = function(option) end, flag = "config_name_list"}); library:update_config_list()
 
             local column = main:column({})
@@ -4034,7 +4034,7 @@
 
                 local style_name = library:get_autoload(style_autoload_path)
                 if style_name then
-                    local style_path = library.directory .. "/styles/" .. style_name .. ".cfg"
+                    local style_path = library.directory .. "/styling/" .. style_name .. ".cfg"
                     if isfile(style_path) then
                         local ok = pcall(function()
                             library:load_style(readfile(style_path))
