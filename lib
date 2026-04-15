@@ -3725,7 +3725,7 @@
             end
 
             local function notify_error(text)
-                notifications:create_notification({name = "Notification", info = text, lifetime = 3})
+                notifications:create_notification({name = "sportsclub", info = text, lifetime = 3})
             end
 
             local column = main:column({})
@@ -3748,7 +3748,7 @@
                 end)
 
                 if ok then
-                    notifications:create_notification({name = "Notification", info = "Saved config: " .. name, lifetime = 3})
+                    notifications:create_notification({name = "sportsclub", info = "Saved config: " .. name, lifetime = 3})
                 else
                     notify_error("Failed to save config")
                     warn("config_save_error:\n" .. tostring(err))
@@ -3771,7 +3771,7 @@
                 end)
 
                 if ok then
-                    notifications:create_notification({name = "Notification", info = "Loaded config: " .. name, lifetime = 3})
+                    notifications:create_notification({name = "sportsclub", info = "Loaded config: " .. name, lifetime = 3})
                 else
                     notify_error("Failed to load config")
                     warn("config_load_error:\n" .. tostring(err))
@@ -3794,7 +3794,7 @@
                 end)
 
                 if ok then
-                    notifications:create_notification({name = "Notification", info = "Deleted config: " .. name, lifetime = 3})
+                    notifications:create_notification({name = "sportsclub", info = "Deleted config: " .. name, lifetime = 3})
                 else
                     notify_error("Failed to delete config")
                     warn("config_delete_error:\n" .. tostring(err))
@@ -3803,7 +3803,7 @@
             section:button({name = "Set as Autoload", callback = function()
                 local name = flags.config_name_list
                 if not name or name == "" then
-                    notifications:create_notification({name = "Notification", info = "Select a config first", lifetime = 3})
+                    notifications:create_notification({name = "sportsclub", info = "Select a config first", lifetime = 3})
                     return
                 end
 
@@ -3813,9 +3813,9 @@
                 end)
 
                 if ok then
-                    notifications:create_notification({name = "Notification", info = "Autoload set: " .. name, lifetime = 3})
+                    notifications:create_notification({name = "sportsclub", info = "Autoload set: " .. name, lifetime = 3})
                 else
-                    notifications:create_notification({name = "Notification", info = "Failed to set autoload", lifetime = 6})
+                    notifications:create_notification({name = "sportsclub", info = "Failed to set autoload", lifetime = 6})
                     warn("config_autoload_set_error:\n" .. tostring(err))
                 end
             end})
@@ -3824,14 +3824,14 @@
                     if isfile(config_autoload_path) then
                         library:clear_autoload(config_autoload_path)
                         autoload_label.set("autoload: none")
-                        notifications:create_notification({name = "Notification", info = "Autoload cleared", lifetime = 3})
+                        notifications:create_notification({name = "sportsclub", info = "Autoload cleared", lifetime = 3})
                     else
-                        notifications:create_notification({name = "Notification", info = "No autoload set", lifetime = 3})
+                        notifications:create_notification({name = "sportsclub", info = "No autoload set", lifetime = 3})
                     end
                 end)
 
                 if not ok then
-                    notifications:create_notification({name = "Notification", info = "Failed to clear autoload", lifetime = 6})
+                    notifications:create_notification({name = "sportsclub", info = "Failed to clear autoload", lifetime = 6})
                     warn("config_autoload_clear_error:\n" .. tostring(err))
                 end
             end})
@@ -3858,7 +3858,7 @@
 
                 local ok, err = library:save_style(name)
                 if ok then
-                    notifications:create_notification({name = "Notification", info = "Saved style: " .. name, lifetime = 3})
+                    notifications:create_notification({name = "sportsclub", info = "Saved style: " .. name, lifetime = 3})
                 else
                     notify_error("Failed to save style")
                     warn("style_save_error:\n" .. tostring(err))
@@ -3872,7 +3872,7 @@
 
                 local ok, err = library:load_style_from_name(name)
                 if ok then
-                    notifications:create_notification({name = "Notification", info = "Loaded style: " .. name, lifetime = 3})
+                    notifications:create_notification({name = "sportsclub", info = "Loaded style: " .. name, lifetime = 3})
                 else
                     notify_error("Failed to load style")
                     warn("style_load_error:\n" .. tostring(err))
@@ -3886,7 +3886,7 @@
 
                 local ok, err = library:delete_style(name)
                 if ok then
-                    notifications:create_notification({name = "Notification", info = "Deleted style: " .. name, lifetime = 3})
+                    notifications:create_notification({name = "sportsclub", info = "Deleted style: " .. name, lifetime = 3})
                 else
                     notify_error("Failed to delete style")
                     warn("style_delete_error:\n" .. tostring(err))
@@ -3895,7 +3895,7 @@
             styling_manage:button({name = "Set Style Autoload", callback = function()
                 local name = flags.style_name_list
                 if not name or name == "" then
-                    notifications:create_notification({name = "Notification", info = "Select a style first", lifetime = 3})
+                    notifications:create_notification({name = "sportsclub", info = "Select a style first", lifetime = 3})
                     return
                 end
 
@@ -3905,9 +3905,9 @@
                 end)
 
                 if ok then
-                    notifications:create_notification({name = "Notification", info = "Style autoload set: " .. name, lifetime = 3})
+                    notifications:create_notification({name = "sportsclub", info = "Style autoload set: " .. name, lifetime = 3})
                 else
-                    notifications:create_notification({name = "Notification", info = "Failed to set style autoload", lifetime = 6})
+                    notifications:create_notification({name = "sportsclub", info = "Failed to set style autoload", lifetime = 6})
                     warn("style_autoload_set_error:\n" .. tostring(err))
                 end
             end})
@@ -3916,14 +3916,14 @@
                     if isfile(style_autoload_path) then
                         library:clear_autoload(style_autoload_path)
                         style_autoload_label.set("autoload: none")
-                        notifications:create_notification({name = "Notification", info = "Style autoload cleared", lifetime = 3})
+                        notifications:create_notification({name = "sportsclub", info = "Style autoload cleared", lifetime = 3})
                     else
-                        notifications:create_notification({name = "Notification", info = "No style autoload set", lifetime = 3})
+                        notifications:create_notification({name = "sportsclub", info = "No style autoload set", lifetime = 3})
                     end
                 end)
 
                 if not ok then
-                    notifications:create_notification({name = "Notification", info = "Failed to clear style autoload", lifetime = 6})
+                    notifications:create_notification({name = "sportsclub", info = "Failed to clear style autoload", lifetime = 6})
                     warn("style_autoload_clear_error:\n" .. tostring(err))
                 end
             end})
@@ -3967,14 +3967,14 @@
             end)
 
             local server_btns = {
-                {"copy jobid", function() setclipboard(game.JobId) notifications:create_notification({name = "Notification", info = "Copied job id", lifetime = 2}) end},
-                {"copy gameid", function() setclipboard(tostring(game.GameId)) notifications:create_notification({name = "Notification", info = "Copied game id", lifetime = 2}) end},
+                {"copy jobid", function() setclipboard(game.JobId) notifications:create_notification({name = "sportsclub", info = "Copied job id", lifetime = 2}) end},
+                {"copy gameid", function() setclipboard(tostring(game.GameId)) notifications:create_notification({name = "sportsclub", info = "Copied game id", lifetime = 2}) end},
                 {"copy join script", function()
                     setclipboard(('game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)'):format(game.PlaceId, game.JobId))
-                    notifications:create_notification({name = "Notification", info = "Copied join script", lifetime = 2})
+                    notifications:create_notification({name = "sportsclub", info = "Copied join script", lifetime = 2})
                 end},
                 {"rejoin", function()
-                    notifications:create_notification({name = "Notification", info = "Rejoining...", lifetime = 2})
+                    notifications:create_notification({name = "sportsclub", info = "Rejoining...", lifetime = 2})
                     task.wait(0.1)
                     game.Players.LocalPlayer:Kick()
                     game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
