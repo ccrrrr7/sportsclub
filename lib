@@ -83,7 +83,7 @@
 
     local themes = {
         preset = {
-            accent = rgb(17, 0, 255),
+            accent = rgb(155, 150, 219),
             window = rgb(14, 14, 16),
             section = rgb(22, 22, 24),
             text = rgb(245, 245, 245),
@@ -4020,7 +4020,7 @@
 
             task.spawn(function()
                 task.wait(1)
-                repeat task.wait() until Library.flags and next(Library.flags)
+                repeat task.wait() until library.flags and next(library.flags)
 
                 local config_name = library:get_autoload(config_autoload_path)
                 if config_name then
