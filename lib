@@ -524,7 +524,7 @@
         function library:Notify(...)
             local props = select(1, ...)
             if type(props) ~= "table" then
-                props = {text = tostring(props), time = select(2, ...) or 5}
+                props = {text = tostring(props), lifetime = select(2, ...) or 5}
             end
 
             props.text = props.text or props.name or "Notify"
@@ -2480,6 +2480,10 @@
                 });
             end 
 
+            function cfg.set(text)
+                items[ "name" ].Text = text
+            end
+
             return setmetatable(cfg, library)
         end 
         
@@ -3721,7 +3725,7 @@
             end
 
             local function notify_error(text)
-                Library:Notify({text = text, time = 3})
+                notifications:create_notification({name = "Notification", info = text, lifetime = 3})
             end
 
             local column = main:column({})
@@ -3744,7 +3748,7 @@
                 end)
 
                 if ok then
-                    Library:Notify({text = "Saved config: " .. name, time = 3})
+                    notifications:create_notification({name = "Notification", info = "Saved config: " .. name, lifetime = 3})
                 else
                     notify_error("Failed to save config")
                     warn("config_save_error:\n" .. tostring(err))
@@ -3767,7 +3771,7 @@
                 end)
 
                 if ok then
-                    Library:Notify({text = "Loaded config: " .. name, time = 3})
+                    notifications:create_notification({name = "Notification", info = "Loaded config: " .. name, lifetime = 3})
                 else
                     notify_error("Failed to load config")
                     warn("config_load_error:\n" .. tostring(err))
@@ -3790,7 +3794,7 @@
                 end)
 
                 if ok then
-                    Library:Notify({text = "Deleted config: " .. name, time = 3})
+                    notifications:create_notification({name = "Notification", info = "Deleted config: " .. name, lifetime = 3})
                 else
                     notify_error("Failed to delete config")
                     warn("config_delete_error:\n" .. tostring(err))
@@ -3799,7 +3803,7 @@
             section:button({name = "Set as Autoload", callback = function()
                 local name = flags.config_name_list
                 if not name or name == "" then
-                    Library:Notify({text = "Select a config first", time = 3})
+                    notifications:create_notification({name = "Notification", info = "Select a config first", lifetime = 3})
                     return
                 end
 
@@ -3809,9 +3813,9 @@
                 end)
 
                 if ok then
-                    Library:Notify({text = "Autoload set: " .. name, time = 3})
+                    notifications:create_notification({name = "Notification", info = "Autoload set: " .. name, lifetime = 3})
                 else
-                    Library:Notify({text = "Failed to set autoload", time = 6})
+                    notifications:create_notification({name = "Notification", info = "Failed to set autoload", lifetime = 6})
                     warn("config_autoload_set_error:\n" .. tostring(err))
                 end
             end})
@@ -3820,19 +3824,17 @@
                     if isfile(config_autoload_path) then
                         library:clear_autoload(config_autoload_path)
                         autoload_label.set("autoload: none")
-                        Library:Notify({text = "Autoload cleared", time = 3})
+                        notifications:create_notification({name = "Notification", info = "Autoload cleared", lifetime = 3})
                     else
-                        Library:Notify({text = "No autoload set", time = 3})
+                        notifications:create_notification({name = "Notification", info = "No autoload set", lifetime = 3})
                     end
                 end)
 
                 if not ok then
-                    Library:Notify({text = "Failed to clear autoload", time = 6})
+                    notifications:create_notification({name = "Notification", info = "Failed to clear autoload", lifetime = 6})
                     warn("config_autoload_clear_error:\n" .. tostring(err))
                 end
             end})
-            section:colorpicker({name = "Menu Accent", flag = "menu_accent_color", callback = function(color, alpha) library:update_theme("accent", color) end, color = themes.preset.accent})
-            section:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.LeftControl, callback = function(bool) window.toggle_menu(bool) end, default = true})
 
             local styling_column = styling_tab:column({})
             local styling_section = styling_column:section({name = "Styling", size = 1, default = true, icon = "rbxassetid://129380150574313"})
@@ -3842,6 +3844,7 @@
             local styling_manage = styling_manage_column:section({name = "Styling Settings", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
             styling_manage:textbox({name = "Style name:", flag = "style_name_text"})
             local style_autoload_label = styling_manage:label({name = "autoload: none"})
+            styling_manage:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.LeftControl, callback = function(bool) window.toggle_menu(bool) end, default = true})
             styling_manage:colorpicker({name = "Menu Accent", flag = "style_accent_color", callback = function(color, alpha) library:update_theme("accent", color) end, color = themes.preset.accent})
             styling_manage:colorpicker({name = "Window Color", flag = "menu_window_color", callback = function(color, alpha) library:update_theme("window", color) end, color = themes.preset.window})
             styling_manage:colorpicker({name = "Section Color", flag = "menu_section_color", callback = function(color, alpha) library:update_theme("section", color) end, color = themes.preset.section})
@@ -3855,7 +3858,7 @@
 
                 local ok, err = library:save_style(name)
                 if ok then
-                    Library:Notify({text = "Saved style: " .. name, time = 3})
+                    notifications:create_notification({name = "Notification", info = "Saved style: " .. name, lifetime = 3})
                 else
                     notify_error("Failed to save style")
                     warn("style_save_error:\n" .. tostring(err))
@@ -3869,7 +3872,7 @@
 
                 local ok, err = library:load_style_from_name(name)
                 if ok then
-                    Library:Notify({text = "Loaded style: " .. name, time = 3})
+                    notifications:create_notification({name = "Notification", info = "Loaded style: " .. name, lifetime = 3})
                 else
                     notify_error("Failed to load style")
                     warn("style_load_error:\n" .. tostring(err))
@@ -3883,7 +3886,7 @@
 
                 local ok, err = library:delete_style(name)
                 if ok then
-                    Library:Notify({text = "Deleted style: " .. name, time = 3})
+                    notifications:create_notification({name = "Notification", info = "Deleted style: " .. name, lifetime = 3})
                 else
                     notify_error("Failed to delete style")
                     warn("style_delete_error:\n" .. tostring(err))
@@ -3892,7 +3895,7 @@
             styling_manage:button({name = "Set Style Autoload", callback = function()
                 local name = flags.style_name_list
                 if not name or name == "" then
-                    Library:Notify({text = "Select a style first", time = 3})
+                    notifications:create_notification({name = "Notification", info = "Select a style first", lifetime = 3})
                     return
                 end
 
@@ -3902,9 +3905,9 @@
                 end)
 
                 if ok then
-                    Library:Notify({text = "Style autoload set: " .. name, time = 3})
+                    notifications:create_notification({name = "Notification", info = "Style autoload set: " .. name, lifetime = 3})
                 else
-                    Library:Notify({text = "Failed to set style autoload", time = 6})
+                    notifications:create_notification({name = "Notification", info = "Failed to set style autoload", lifetime = 6})
                     warn("style_autoload_set_error:\n" .. tostring(err))
                 end
             end})
@@ -3913,14 +3916,14 @@
                     if isfile(style_autoload_path) then
                         library:clear_autoload(style_autoload_path)
                         style_autoload_label.set("autoload: none")
-                        Library:Notify({text = "Style autoload cleared", time = 3})
+                        notifications:create_notification({name = "Notification", info = "Style autoload cleared", lifetime = 3})
                     else
-                        Library:Notify({text = "No style autoload set", time = 3})
+                        notifications:create_notification({name = "Notification", info = "No style autoload set", lifetime = 3})
                     end
                 end)
 
                 if not ok then
-                    Library:Notify({text = "Failed to clear style autoload", time = 6})
+                    notifications:create_notification({name = "Notification", info = "Failed to clear style autoload", lifetime = 6})
                     warn("style_autoload_clear_error:\n" .. tostring(err))
                 end
             end})
@@ -3964,14 +3967,14 @@
             end)
 
             local server_btns = {
-                {"copy jobid", function() setclipboard(game.JobId) Library:Notify({text = "Copied job id", time = 2}) end},
-                {"copy gameid", function() setclipboard(tostring(game.GameId)) Library:Notify({text = "Copied game id", time = 2}) end},
+                {"copy jobid", function() setclipboard(game.JobId) notifications:create_notification({name = "Notification", info = "Copied job id", lifetime = 2}) end},
+                {"copy gameid", function() setclipboard(tostring(game.GameId)) notifications:create_notification({name = "Notification", info = "Copied game id", lifetime = 2}) end},
                 {"copy join script", function()
                     setclipboard(('game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)'):format(game.PlaceId, game.JobId))
-                    Library:Notify({text = "Copied join script", time = 2})
+                    notifications:create_notification({name = "Notification", info = "Copied join script", lifetime = 2})
                 end},
                 {"rejoin", function()
-                    Library:Notify({text = "Rejoining...", time = 2})
+                    notifications:create_notification({name = "Notification", info = "Rejoining...", lifetime = 2})
                     task.wait(0.1)
                     game.Players.LocalPlayer:Kick()
                     game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
@@ -3989,7 +3992,7 @@
                 end)
 
                 if not ok or not res or not res.data then
-                    Library:Notify({text = "Failed to fetch servers", time = 3})
+                    notifications:create_notification({name = "Notification", info = "Failed to fetch servers", lifetime = 3})
                     return
                 end
 
@@ -4001,12 +4004,12 @@
                 end
 
                 if #candidates > 0 then
-                    Library:Notify({text = "Joining new server...", time = 2})
+                    notifications:create_notification({name = "Notification", info = "Joining new server...", lifetime = 2})
                     task.wait(0.1)
                     game.Players.LocalPlayer:Kick()
                     ts:TeleportToPlaceInstance(game.PlaceId, candidates[random(1, #candidates)].id)
                 else
-                    Library:Notify({text = "No matching servers found", time = 3})
+                    notifications:create_notification({name = "Notification", info = "No matching servers found", lifetime = 3})
                 end
             end})
             section_server:slider({name = "min players", flag = "min_players", min = 0, max = 40, default = 0, interval = 1})
@@ -4027,7 +4030,7 @@
                             library:load_config(readfile(config_path))
                         end)
                         if ok then
-                            Library:Notify({text = "Auto loaded config: " .. config_name, time = 3})
+                            notifications:create_notification({name = "Notification", info = "Auto loaded config: " .. config_name, lifetime = 3})
                         end
                     end
                 end
@@ -4040,7 +4043,7 @@
                             library:load_style(readfile(style_path))
                         end)
                         if ok then
-                            Library:Notify({text = "Auto loaded style: " .. style_name, time = 3})
+                            notifications:create_notification({name = "Notification", info = "Auto loaded style: " .. style_name, lifetime = 3})
                         end
                     end
                 end
@@ -4103,203 +4106,120 @@
                 name = options.name or "This is a title!";
                 info = options.info or "This is extra info!";
                 lifetime = options.lifetime or 3;
-                image = options.image;
                 items = {};
                 outline;
             }
 
-            local has_image = cfg.image ~= nil
-            local items = cfg.items; do
-                items["notification"] = library:create("Frame", {
-                    Parent = library["items"];
-                    Size = dim2(0, has_image and 250 or 230, 0, 30);
+            local items = cfg.items; do 
+                items[ "notification" ] = library:create( "Frame" , {
+                    Parent = library[ "items" ];
+                    Size = dim2(0, 210, 0, 53);
                     Name = "\0";
                     BorderColor3 = rgb(0, 0, 0);
                     BorderSizePixel = 0;
                     BackgroundTransparency = 1;
                     AnchorPoint = vec2(1, 0);
                     AutomaticSize = Enum.AutomaticSize.Y;
-                    BackgroundColor3 = rgb(18, 18, 22)
-                })
-
-                library:create("UICorner", {
-                    Parent = items["notification"];
-                    CornerRadius = dim(0, 6)
-                })
-
-                items["shadow"] = library:create("Frame", {
-                    Parent = items["notification"];
-                    Position = dim2(0, 0, 0, 0);
-                    Size = dim2(1, 0, 1, 0);
-                    ZIndex = 0;
-                    BorderSizePixel = 0;
-                    BackgroundColor3 = rgb(0, 0, 0);
-                    BackgroundTransparency = 1
-                })
-
-                library:create("UICorner", {
-                    Parent = items["shadow"];
-                    CornerRadius = dim(0, 6)
-                })
-
-                items["inline"] = library:create("Frame", {
-                    Parent = items["notification"];
-                    Position = dim2(0, 1, 0, 1);
-                    Size = dim2(1, -2, 1, -2);
-                    BorderSizePixel = 0;
-                    BackgroundColor3 = rgb(30, 30, 35);
-                    BackgroundTransparency = 1
-                })
-
-                library:create("UICorner", {
-                    Parent = items["inline"];
-                    CornerRadius = dim(0, 5)
-                })
-
-                items["bg"] = library:create("Frame", {
-                    Parent = items["inline"];
-                    Position = dim2(0, 1, 0, 1);
-                    Size = dim2(1, -2, 1, -2);
-                    BorderSizePixel = 0;
-                    BackgroundColor3 = rgb(255, 255, 255);
-                    BackgroundTransparency = 1
-                })
-
-                library:create("UICorner", {
-                    Parent = items["bg"];
-                    CornerRadius = dim(0, 4)
-                })
-
-                library:create("UIGradient", {
-                    Parent = items["bg"];
-                    Rotation = 90;
-                    Color = rgbseq{rgbkey(0, rgb(28, 28, 32)), rgbkey(1, rgb(18, 18, 22))}
-                })
-
-                items["accent"] = library:create("Frame", {
-                    Parent = items["notification"];
-                    Position = dim2(0, 4, 0, 4);
-                    Size = dim2(0, 2, 1, -8);
-                    BorderSizePixel = 0;
-                    BackgroundColor3 = themes.preset.accent;
-                    BackgroundTransparency = 1
-                }); library:apply_theme(items["accent"], "accent", "BackgroundColor3")
-
-                library:create("UICorner", {
-                    Parent = items["accent"];
-                    CornerRadius = dim(0, 4)
-                })
-
-                items["bar"] = library:create("Frame", {
-                    Parent = items["notification"];
-                    Position = dim2(0, 2, 1, -3);
-                    Size = dim2(0, 0, 0, 1);
-                    BorderSizePixel = 0;
-                    BackgroundColor3 = themes.preset.accent;
-                    BackgroundTransparency = 1
-                }); library:apply_theme(items["bar"], "accent", "BackgroundColor3")
-
-                items["title"] = library:create("TextLabel", {
+                    BackgroundColor3 = rgb(14, 14, 16)
+                });
+                
+                library:create( "UIStroke" , {
+                    Color = rgb(23, 23, 29);
+                    Parent = items[ "notification" ];
+                    Transparency = 1;
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                });
+                
+                items[ "title" ] = library:create( "TextLabel" , {
                     FontFace = fonts.font;
-                    TextColor3 = themes.preset.text;
+                    TextColor3 = rgb(255, 255, 255);
                     BorderColor3 = rgb(0, 0, 0);
                     Text = cfg.name;
-                    Parent = items["bg"];
+                    Parent = items[ "notification" ];
                     Name = "\0";
                     BackgroundTransparency = 1;
-                    Position = dim2(0, has_image and 24 or 10, 0, 5);
+                    Position = dim2(0, 7, 0, 6);
                     BorderSizePixel = 0;
                     AutomaticSize = Enum.AutomaticSize.XY;
-                    TextSize = 13;
-                    TextTransparency = 1;
-                    BackgroundColor3 = rgb(255, 255, 255);
-                    TextXAlignment = Enum.TextXAlignment.Left
-                }); library:apply_theme(items["title"], "text", "TextColor3")
-
-                items["info"] = library:create("TextLabel", {
-                    FontFace = fonts.small;
-                    TextColor3 = themes.preset.muted;
+                    TextSize = 14;
+                    BackgroundColor3 = rgb(255, 255, 255)
+                });
+                
+                library:create( "UICorner" , {
+                    Parent = items[ "notification" ];
+                    CornerRadius = dim(0, 3)
+                });
+                
+                items[ "info" ] = library:create( "TextLabel" , {
+                    FontFace = fonts.font;
+                    TextColor3 = rgb(145, 145, 145);
                     BorderColor3 = rgb(0, 0, 0);
                     Text = cfg.info;
-                    Parent = items["bg"];
+                    Parent = items[ "notification" ];
                     Name = "\0";
-                    Position = dim2(0, has_image and 24 or 10, 0, 20);
+                    Position = dim2(0, 9, 0, 22);
                     BorderSizePixel = 0;
                     BackgroundTransparency = 1;
                     TextXAlignment = Enum.TextXAlignment.Left;
                     TextWrapped = true;
                     AutomaticSize = Enum.AutomaticSize.XY;
-                    TextSize = 12;
-                    TextTransparency = 1;
+                    TextSize = 14;
                     BackgroundColor3 = rgb(255, 255, 255)
-                }); library:apply_theme(items["info"], "muted", "TextColor3")
-
-                library:create("UIPadding", {
-                    PaddingBottom = dim(0, 10);
-                    PaddingRight = dim(0, 10);
-                    Parent = items["info"]
-                })
-
-                if has_image then
-                    items["image"] = library:create("ImageLabel", {
-                        Parent = items["bg"];
-                        Position = dim2(0, 8, 0, 8);
-                        Size = dim2(0, 12, 0, 12);
-                        BackgroundTransparency = 1;
-                        Image = cfg.image;
-                        ImageColor3 = themes.preset.accent;
-                        ImageTransparency = 1;
-                        ZIndex = 2
-                    }); library:apply_theme(items["image"], "accent", "ImageColor3")
-                end
+                });
+                
+                library:create( "UIPadding" , {
+                    PaddingBottom = dim(0, 17);
+                    PaddingRight = dim(0, 8);
+                    Parent = items[ "info" ]
+                });
+                
+                items[ "bar" ] = library:create( "Frame" , {
+                    AnchorPoint = vec2(0, 1);
+                    Parent = items[ "notification" ];
+                    Name = "\0";
+                    Position = dim2(0, 8, 1, -6);
+                    BorderColor3 = rgb(0, 0, 0);
+                    Size = dim2(0, 0, 0, 5);
+                    BackgroundTransparency = 1;
+                    BorderSizePixel = 0;
+                    BackgroundColor3 = themes.preset.accent
+                });
+                
+                library:create( "UICorner" , {
+                    Parent = items[ "bar" ];
+                    CornerRadius = dim(0, 999)
+                });
+                
+                library:create( "UIPadding" , {
+                    PaddingRight = dim(0, 8);
+                    Parent = items[ "notification" ]
+                });
             end
-
+            
             local index = #notifications.notifs + 1
-            notifications.notifs[index] = items["notification"]
+            notifications.notifs[index] = items[ "notification" ]
 
+            notifications:fade(items[ "notification" ], false)
+            
             local offset = notifications:refresh_notifs()
-            items["notification"].Position = dim_offset(20, offset)
 
-            local fade_in = TweenInfo.new(0.12, Enum.EasingStyle.Circular, Enum.EasingDirection.Out)
-            tween_service:Create(items["notification"], fade_in, {BackgroundTransparency = 0}):Play()
-            tween_service:Create(items["shadow"], fade_in, {BackgroundTransparency = 0.85}):Play()
-            tween_service:Create(items["inline"], fade_in, {BackgroundTransparency = 0}):Play()
-            tween_service:Create(items["bg"], fade_in, {BackgroundTransparency = 0}):Play()
-            tween_service:Create(items["accent"], fade_in, {BackgroundTransparency = 0}):Play()
-            tween_service:Create(items["bar"], fade_in, {BackgroundTransparency = 0}):Play()
-            tween_service:Create(items["title"], fade_in, {TextTransparency = 0}):Play()
-            tween_service:Create(items["info"], fade_in, {TextTransparency = 0}):Play()
-            if items["image"] then
-                tween_service:Create(items["image"], fade_in, {ImageTransparency = 0}):Play()
-            end
+            items[ "notification" ].Position = dim_offset(20, offset)
 
-            task.wait()
-            local final_width = items["notification"].AbsoluteSize.X
-            tween_service:Create(items["bar"], TweenInfo.new(cfg.lifetime, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {Size = dim2(0, final_width - 4, 0, 1)}):Play()
+            library:tween(items[ "notification" ], {AnchorPoint = vec2(0, 0)}, Enum.EasingStyle.Quad, 1)
+            library:tween(items[ "bar" ], {Size = dim2(1, -8, 0, 5)}, Enum.EasingStyle.Quad, cfg.lifetime)
 
             task.spawn(function()
                 task.wait(cfg.lifetime)
-
+                
                 notifications.notifs[index] = nil
-                notifications:refresh_notifs()
+                
+                notifications:fade(items[ "notification" ], true)
+                
+                library:tween(items[ "notification" ], {AnchorPoint = vec2(1, 0)}, Enum.EasingStyle.Quad, 1)
 
-                local fade_out = TweenInfo.new(0.12, Enum.EasingStyle.Circular, Enum.EasingDirection.Out)
-                tween_service:Create(items["notification"], fade_out, {BackgroundTransparency = 1}):Play()
-                tween_service:Create(items["shadow"], fade_out, {BackgroundTransparency = 1}):Play()
-                tween_service:Create(items["inline"], fade_out, {BackgroundTransparency = 1}):Play()
-                tween_service:Create(items["bg"], fade_out, {BackgroundTransparency = 1}):Play()
-                tween_service:Create(items["accent"], fade_out, {BackgroundTransparency = 1}):Play()
-                tween_service:Create(items["bar"], fade_out, {BackgroundTransparency = 1}):Play()
-                tween_service:Create(items["title"], fade_out, {TextTransparency = 1}):Play()
-                tween_service:Create(items["info"], fade_out, {TextTransparency = 1}):Play()
-                if items["image"] then
-                    tween_service:Create(items["image"], fade_out, {ImageTransparency = 1}):Play()
-                end
-
-                task.wait(0.12)
-                if items["notification"] and items["notification"].Parent then
-                    items["notification"]:Destroy()
-                end
+                task.wait(1)
+        
+                items[ "notification" ]:Destroy() 
             end)
         end
     --
