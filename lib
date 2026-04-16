@@ -309,7 +309,7 @@
                         )
                     )
 
-                    library:tween(frame, {Size = current_size}, Enum.EasingStyle.Linear, 0.05)
+                    frame.Size = current_size
                 end
             end)
         end 
@@ -481,7 +481,7 @@
                         )
                     )
 
-                    library:tween(frame, {Position = current_position}, Enum.EasingStyle.Linear, 0.05)
+                    frame.Position = current_position
                     library:close_element()
                 end
             end)
@@ -4396,7 +4396,7 @@
                     BorderColor3 = rgb(0, 0, 0);
                     BorderSizePixel = 0;
                     BackgroundTransparency = 0;
-                    AnchorPoint = vec2(1, 0);
+                    AnchorPoint = vec2(0, 0);
                     AutomaticSize = Enum.AutomaticSize.Y;
                     BackgroundColor3 = rgb(18, 18, 22)
                 });
