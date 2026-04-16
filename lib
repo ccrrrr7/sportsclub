@@ -2129,7 +2129,7 @@
             function cfg.set(value)
                 cfg.value = clamp(library:round(value, cfg.intervals), cfg.min, cfg.max)
 
-                library:tween(items[ "fill" ], {Size = dim2((cfg.value - cfg.min) / (cfg.max - cfg.min), cfg.value == cfg.min and 0 or -4, 0, 2)}, Enum.EasingStyle.Linear, 0.05)
+                items[ "fill" ].Size = dim2((cfg.value - cfg.min) / (cfg.max - cfg.min), cfg.value == cfg.min and 0 or -4, 0, 2)
                 items[ "value" ].Text = tostring(cfg.value) .. cfg.suffix
 
                 flags[cfg.flag] = cfg.value
@@ -2585,7 +2585,7 @@
                         local render_rows = min(visible_count, 7)
                         local a = (render_rows * 21) + 12
                         items[ "list_scroller" ].ScrollBarThickness = visible_count > 7 and 3 or 0
-                        library:tween(items[ "dropdown_holder" ], {Size = dim_offset(items[ "dropdown" ].AbsoluteSize.X, a)})
+                        items[ "dropdown_holder" ].Size = dim_offset(items[ "dropdown" ].AbsoluteSize.X, a)
                     end
                 end)
             end
@@ -4216,31 +4216,28 @@
             local section_server = additional_column:section({name = "Additional", size = 1, default = true, icon = "rbxassetid://129380150574313"})
 
             local server_info_label = section_server:label({name = "players: -"})
-            local ping_label = section_server:label({name = "ping: -"})
-            local fps_label = section_server:label({name = "fps: -"})
             local uptime_label = section_server:label({name = "uptime: -"})
             local clock = os.clock
             local floor = math.floor
             local format = string.format
             local players_service = players
             local max_players = game.Players.MaxPlayers
-            local ping_stat = stats.Network.ServerStatsItem["Data Ping"]
             local start_time = clock()
-
-            task.spawn(function()
-                while task.wait(1) do
-                    local ping = floor(ping_stat:GetValue())
-                    local fps = floor(1 / run.Heartbeat:Wait())
-                    local player_count = #players_service:GetPlayers()
-                    local uptime_secs = floor(clock() - start_time)
-                    local mins = floor(uptime_secs / 60)
-                    local secs = uptime_secs % 60
-
-                    ping_label.set("network ping: " .. ping .. "ms")
-                    fps_label.set("frames per second: " .. fps)
-                    server_info_label.set("players: " .. player_count .. "/" .. max_players)
-                    uptime_label.set("ascendify runtime: " .. format("%02d:%02d", mins, secs))
+            local stat_accumulator = 0
+            library:connection(run.Heartbeat, function(delta_time)
+                stat_accumulator += delta_time
+                if stat_accumulator < 1 then
+                    return
                 end
+
+                stat_accumulator = 0
+                local player_count = #players_service:GetPlayers()
+                local uptime_secs = floor(clock() - start_time)
+                local mins = floor(uptime_secs / 60)
+                local secs = uptime_secs % 60
+
+                server_info_label.set("players: " .. player_count .. "/" .. max_players)
+                uptime_label.set("runtime: " .. format("%02d:%02d", mins, secs))
             end)
 
             local server_btns = {
@@ -4349,7 +4346,7 @@
 
             for i, v in notifications.notifs do
                 local Position = vec2(20, offset)
-                library:tween(v, {Position = dim_offset(Position.X, Position.Y)}, Enum.EasingStyle.Quint, 0.35)
+                library:tween(v, {Position = dim_offset(Position.X, Position.Y)}, Enum.EasingStyle.Quad, 0.4)
                 offset += (v.AbsoluteSize.Y + 10)
             end
 
@@ -4371,10 +4368,9 @@
                 end 
         
                 if instance:IsA("TextLabel") then
-                    library:tween(instance, {TextTransparency = fading}, Enum.EasingStyle.Quad, 0.45)
+                    library:tween(instance, {TextTransparency = fading})
                 elseif instance:IsA("Frame") then
-                    local target = is_fading and 1 or (instance.Name == "bar" and 0.1 or 0)
-                    library:tween(instance, {BackgroundTransparency = target}, Enum.EasingStyle.Quad, 0.45)
+                    library:tween(instance, {BackgroundTransparency = instance.Transparency and 0.6 and is_fading and 1 or 0.6}, Enum.EasingStyle.Quad, 1)
                 end
             end
         end 
@@ -4391,14 +4387,14 @@
             local items = cfg.items; do 
                 items[ "notification" ] = library:create( "Frame" , {
                     Parent = library[ "items" ];
-                    Size = dim2(0, 250, 0, 56);
+                    Size = dim2(0, 210, 0, 53);
                     Name = "\0";
                     BorderColor3 = rgb(0, 0, 0);
                     BorderSizePixel = 0;
-                    BackgroundTransparency = 0;
-                    AnchorPoint = vec2(0, 0);
+                    BackgroundTransparency = 1;
+                    AnchorPoint = vec2(1, 0);
                     AutomaticSize = Enum.AutomaticSize.Y;
-                    BackgroundColor3 = rgb(18, 18, 22)
+                    BackgroundColor3 = rgb(14, 14, 16)
                 });
                 
                 library:create( "UIStroke" , {
@@ -4416,7 +4412,7 @@
                     Parent = items[ "notification" ];
                     Name = "\0";
                     BackgroundTransparency = 1;
-                    Position = dim2(0, 9, 0, 7);
+                    Position = dim2(0, 7, 0, 6);
                     BorderSizePixel = 0;
                     AutomaticSize = Enum.AutomaticSize.XY;
                     TextSize = 14;
@@ -4430,12 +4426,12 @@
                 
                 items[ "info" ] = library:create( "TextLabel" , {
                     FontFace = fonts.font;
-                    TextColor3 = rgb(165, 165, 170);
+                    TextColor3 = rgb(145, 145, 145);
                     BorderColor3 = rgb(0, 0, 0);
                     Text = cfg.info;
                     Parent = items[ "notification" ];
                     Name = "\0";
-                    Position = dim2(0, 9, 0, 24);
+                    Position = dim2(0, 9, 0, 22);
                     BorderSizePixel = 0;
                     BackgroundTransparency = 1;
                     TextXAlignment = Enum.TextXAlignment.Left;
@@ -4457,8 +4453,8 @@
                     Name = "\0";
                     Position = dim2(0, 8, 1, -6);
                     BorderColor3 = rgb(0, 0, 0);
-                    Size = dim2(0, 0, 0, 4);
-                    BackgroundTransparency = 0.1;
+                    Size = dim2(0, 0, 0, 5);
+                    BackgroundTransparency = 1;
                     BorderSizePixel = 0;
                     BackgroundColor3 = themes.preset.accent
                 });
@@ -4481,10 +4477,10 @@
             
             local offset = notifications:refresh_notifs()
 
-            items[ "notification" ].Position = dim_offset(-items[ "notification" ].AbsoluteSize.X - 20, offset)
+            items[ "notification" ].Position = dim_offset(20, offset)
 
-            library:tween(items[ "notification" ], {Position = dim_offset(20, offset)}, Enum.EasingStyle.Quint, 0.35)
-            library:tween(items[ "bar" ], {Size = dim2(1, -16, 0, 4)}, Enum.EasingStyle.Linear, cfg.lifetime)
+            library:tween(items[ "notification" ], {AnchorPoint = vec2(0, 0)}, Enum.EasingStyle.Quad, 1)
+            library:tween(items[ "bar" ], {Size = dim2(1, -8, 0, 5)}, Enum.EasingStyle.Quad, cfg.lifetime)
 
             task.spawn(function()
                 task.wait(cfg.lifetime)
@@ -4493,9 +4489,9 @@
                 
                 notifications:fade(items[ "notification" ], true)
                 
-                library:tween(items[ "notification" ], {Position = dim_offset(-items[ "notification" ].AbsoluteSize.X - 20, items[ "notification" ].Position.Y.Offset)}, Enum.EasingStyle.Quint, 0.3)
+                library:tween(items[ "notification" ], {AnchorPoint = vec2(1, 0)}, Enum.EasingStyle.Quad, 1)
 
-                task.wait(0.35)
+                task.wait(1)
         
                 items[ "notification" ]:Destroy() 
             end)
