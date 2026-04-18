@@ -1899,7 +1899,7 @@
                 --                
             end;
             
-            function cfg.set(bool)
+            function cfg.update(bool)
                 if cfg.type == "checkbox" then 
                     library:tween(items[ "tick" ], {Rotation = bool and 0 or 45, ImageTransparency = bool and 0 or 1})
                     library:tween(items[ "toggle_button" ], {BackgroundColor3 = bool and themes.preset.accent or rgb(67, 67, 68)})
@@ -1910,13 +1910,16 @@
                     library:tween(items[ "circle" ], {BackgroundColor3 = bool and rgb(255, 255, 255) or rgb(86, 86, 88), Position = bool and dim2(1, -14, 0, 2) or dim2(0, 2, 0, 2)}, Enum.EasingStyle.Quad)
                 end
 
-                cfg.callback(bool)
-
                 if cfg.folding then 
                     elements.Visible = bool
                 end
 
                 flags[cfg.flag] = bool
+            end 
+
+            function cfg.set(bool)
+                cfg.update(bool)
+                cfg.callback(bool)
             end 
             
             items[ "toggle" ].MouseButton1Click:Connect(function()
@@ -1941,7 +1944,7 @@
                 });
             end
 
-            cfg.set(cfg.default)
+            cfg.update(cfg.default)
 
             config_flags[cfg.flag] = cfg.set
 
