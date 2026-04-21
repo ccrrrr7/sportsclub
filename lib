@@ -1021,39 +1021,6 @@
                     TextSize = 14;
                     BackgroundColor3 = rgb(255, 255, 255)
                 }); library:apply_theme(items[ "other_info" ], "accent", "TextColor3");
-                
-                -- Unload Button
-                items[ "unload_button" ] = library:create( "TextButton" , {
-                    FontFace = fonts.font;
-                    TextColor3 = rgb(255, 255, 255);
-                    BorderColor3 = rgb(0, 0, 0);
-                    Text = "Unload";
-                    AutoButtonColor = false;
-                    Parent = items[ "info" ];
-                    Name = "\0";
-                    Position = dim2(1, -65, 0.5, -8);
-                    AnchorPoint = vec2(1, 0.5);
-                    Size = dim2(0, 55, 0, 16);
-                    BorderSizePixel = 0;
-                    TextSize = 12;
-                    BackgroundColor3 = rgb(220, 53, 69)
-                }); library:apply_theme(items[ "unload_button" ], "accent", "BackgroundColor3");
-                
-                library:create( "UICorner" , {
-                    Parent = items[ "unload_button" ];
-                    CornerRadius = dim(0, 4)
-                });
-                
-                library:create( "UIStroke" , {
-                    Color = rgb(255, 100, 100);
-                    Parent = items[ "unload_button" ];
-                    Thickness = 1;
-                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-                });
-                
-                items[ "unload_button" ].MouseButton1Click:Connect(function()
-                    library:unload_menu()
-                end);
             end 
 
             do -- Other
@@ -1062,16 +1029,42 @@
             end 
 
             function cfg.toggle_menu(bool) 
-                -- WIP 
-                -- if cfg.tween then 
-                --     cfg.tween:Cancel()
-                -- end 
+                if cfg.tween then 
+                    cfg.tween:Cancel()
+                end 
 
-                -- items[ "main" ].Size = dim2(items[ "main" ].Size.Scale.X, items[ "main" ].Size.Offset.X - 20, items[ "main" ].Size.Scale.Y, items[ "main" ].Size.Offset.Y - 20)
-                -- library:tween(items[ "tab_holder" ], {Size = dim2(1, -196, 1, -81)}, Enum.EasingStyle.Quad, 0.4)
-                -- cfg.tween = 
-                
-                library[ "items" ].Enabled = bool
+                if bool then
+                    -- Opening animation
+                    library[ "items" ].Enabled = true
+                    
+                    items[ "main" ].Size = dim2(0, cfg.size.X.Offset - 20, 0, cfg.size.Y.Offset - 20)
+                    items[ "main" ].BackgroundTransparency = 1
+                    items[ "shadow" ].ImageTransparency = 1
+                    
+                    cfg.tween = library:tween(items[ "main" ], {
+                        Size = cfg.size,
+                        BackgroundTransparency = 0
+                    }, Enum.EasingStyle.Back, 0.4)
+                    
+                    library:tween(items[ "shadow" ], {ImageTransparency = 0.5}, Enum.EasingStyle.Quad, 0.4)
+                else
+                    -- Closing animation
+                    cfg.tween = library:tween(items[ "main" ], {
+                        Size = dim2(0, cfg.size.X.Offset - 20, 0, cfg.size.Y.Offset - 20),
+                        BackgroundTransparency = 1
+                    }, Enum.EasingStyle.Back, 0.4)
+                    
+                    library:tween(items[ "shadow" ], {ImageTransparency = 1}, Enum.EasingStyle.Quad, 0.4)
+                    
+                    -- Disable UI after animation completes (non-blocking)
+                    local disable_connection
+                    disable_connection = run.Heartbeat:Connect(function()
+                        if not cfg.tween or not cfg.tween.Instance then
+                            disable_connection:Disconnect()
+                            library[ "items" ].Enabled = false
+                        end
+                    end)
+                end
             end 
                 
             return setmetatable(cfg, library)
@@ -4286,6 +4279,9 @@
                 library:update_theme("section", rgb(22, 22, 24))
                 library:update_theme("text", rgb(245, 245, 245))
                 library:update_theme("muted", rgb(72, 72, 73))
+            end})
+            styling_manage:button({name = "Unload Menu", callback = function()
+                library:unload_menu()
             end})
 
             local additional_column = additional_tab:column({})
