@@ -463,22 +463,11 @@
                 end
 
                 if dragging and library:is_pointer_movement(input) then
-                    local viewport_x = camera.ViewportSize.X
-                    local viewport_y = camera.ViewportSize.Y
-
                     local current_position = dim2(
                         0,
-                        clamp(
-                            start_size.X.Offset + (input.Position.X - start.X),
-                            0,
-                            viewport_x - frame.Size.X.Offset
-                        ),
+                        start_size.X.Offset + (input.Position.X - start.X),
                         0,
-                        math.clamp(
-                            start_size.Y.Offset + (input.Position.Y - start.Y),
-                            0,
-                            viewport_y - frame.Size.Y.Offset
-                        )
+                        start_size.Y.Offset + (input.Position.Y - start.Y)
                     )
 
                     frame.Position = current_position
@@ -748,19 +737,54 @@
         end
 
         function library:unload_menu() 
-            if library[ "items" ] then 
-                library[ "items" ]:Destroy()
-            end
-
-            if library[ "other" ] then 
-                library[ "other" ]:Destroy()
-            end 
-            
+            -- Disconnect all active connections
             for index, connection in library.connections do 
-                connection:Disconnect() 
+                if connection and typeof(connection) == "RBXScriptConnection" then
+                    pcall(function()
+                        connection:Disconnect() 
+                    end)
+                end
                 connection = nil 
             end
             
+            library.connections = {}
+            
+            -- Clear all flags
+            library.flags = {}
+            library.config_flags = {}
+            
+            -- Destroy UI elements
+            if library.size_lock_gui and library.size_lock_gui.Parent then 
+                library.size_lock_gui:Destroy()
+            end
+            
+            if library["items"] then 
+                library["items"]:Destroy()
+            end
+
+            if library["other"] then 
+                library["other"]:Destroy()
+            end 
+            
+            -- Cleanup notification system
+            if library.notifications and library.notifications.notifs then
+                for _, notif in library.notifications.notifs do
+                    if notif and notif.Parent then
+                        pcall(function()
+                            notif:Destroy()
+                        end)
+                    end
+                end
+                library.notifications.notifs = {}
+            end
+            
+            -- Clear cache if it exists
+            if library.cache then
+                library.cache:Destroy()
+            end
+            
+            -- Mark library as unloaded
+            library.unloaded = true
             library = nil 
         end 
     --
@@ -811,8 +835,9 @@
                 });
                 
                 library:create( "UIStroke" , {
-                    Color = rgb(23, 23, 29);
+                    Color = rgb(45, 45, 55);
                     Parent = items[ "main" ];
+                    Thickness = 1.5;
                     ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                 });
                 
@@ -906,13 +931,14 @@
                     BorderColor3 = rgb(0, 0, 0);
                     Name = "\0";
                     BackgroundColor3 = rgb(255, 255, 255);
-                    Size = dim2(1, 75, 1, 75);
+                    Size = dim2(1, 100, 1, 100);
                     AnchorPoint = vec2(0.5, 0.5);
                     Image = "rbxassetid://112971167999062";
                     BackgroundTransparency = 1;
                     Position = dim2(0.5, 0, 0.5, 0);
-                    SliceScale = 0.75;
+                    SliceScale = 0.85;
                     ZIndex = -100;
+                    ImageTransparency = 0.5;
                     BorderSizePixel = 0;
                     SliceCenter = rect(vec2(112, 112), vec2(147, 147))
                 });
@@ -994,7 +1020,40 @@
                     FontFace = fonts.font;
                     TextSize = 14;
                     BackgroundColor3 = rgb(255, 255, 255)
-                }); library:apply_theme(items[ "other_info" ], "accent", "TextColor3");        
+                }); library:apply_theme(items[ "other_info" ], "accent", "TextColor3");
+                
+                -- Unload Button
+                items[ "unload_button" ] = library:create( "TextButton" , {
+                    FontFace = fonts.font;
+                    TextColor3 = rgb(255, 255, 255);
+                    BorderColor3 = rgb(0, 0, 0);
+                    Text = "Unload";
+                    AutoButtonColor = false;
+                    Parent = items[ "info" ];
+                    Name = "\0";
+                    Position = dim2(1, -65, 0.5, -8);
+                    AnchorPoint = vec2(1, 0.5);
+                    Size = dim2(0, 55, 0, 16);
+                    BorderSizePixel = 0;
+                    TextSize = 12;
+                    BackgroundColor3 = rgb(220, 53, 69)
+                }); library:apply_theme(items[ "unload_button" ], "accent", "BackgroundColor3");
+                
+                library:create( "UICorner" , {
+                    Parent = items[ "unload_button" ];
+                    CornerRadius = dim(0, 4)
+                });
+                
+                library:create( "UIStroke" , {
+                    Color = rgb(255, 100, 100);
+                    Parent = items[ "unload_button" ];
+                    Thickness = 1;
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                });
+                
+                items[ "unload_button" ].MouseButton1Click:Connect(function()
+                    library:unload_menu()
+                end);
             end 
 
             do -- Other
@@ -1057,11 +1116,11 @@
                         Size = dim2(1, 0, 0, 35);
                         BorderSizePixel = 0;
                         TextSize = 16;
-                        BackgroundColor3 = rgb(29, 29, 29)
+                        BackgroundColor3 = rgb(35, 35, 40)
                     });
                     
                     items[ "icon" ] = library:create( "ImageLabel" , {
-                        ImageColor3 = rgb(72, 72, 73);
+                        ImageColor3 = rgb(100, 100, 110);
                         BorderColor3 = rgb(0, 0, 0);
                         Parent = items[ "button" ];
                         AnchorPoint = vec2(0, 0.5);
@@ -1076,7 +1135,7 @@
                     
                     items[ "name" ] = library:create( "TextLabel" , {
                         FontFace = fonts.font;
-                        TextColor3 = rgb(72, 72, 73);
+                        TextColor3 = rgb(120, 120, 130);
                         BorderColor3 = rgb(0, 0, 0);
                         Text = cfg.name;
                         Parent = items[ "button" ];
@@ -1341,6 +1400,19 @@
                 cfg.open_tab()
             end)
             
+            -- Add hover effects for better visual feedback
+            library:connection(items[ "button" ].MouseEnter, function()
+                if not self.selected_tab or self.selected_tab[1] ~= items["button"] then
+                    library:tween(items[ "button" ], {BackgroundColor3 = rgb(45, 45, 52)}, Enum.EasingStyle.Quad, 0.15)
+                end
+            end)
+            
+            library:connection(items[ "button" ].MouseLeave, function()
+                if not self.selected_tab or self.selected_tab[1] ~= items["button"] then
+                    library:tween(items[ "button" ], {BackgroundColor3 = rgb(35, 35, 40)}, Enum.EasingStyle.Quad, 0.15)
+                end
+            end)
+            
             if not self.selected_tab then 
                 cfg.open_tab(true) 
             end
@@ -1482,10 +1554,10 @@
                 });
                 
                 items[ "scrolling" ] = library:create( "ScrollingFrame" , {
-                    ScrollBarImageColor3 = rgb(44, 44, 46);
+                    ScrollBarImageColor3 = rgb(60, 60, 70);
                     Active = true;
                     AutomaticCanvasSize = Enum.AutomaticSize.Y;
-                    ScrollBarThickness = 2;
+                    ScrollBarThickness = 4;
                     Parent = items[ "inline" ];
                     Name = "\0";
                     Size = dim2(1, 0, 1, -40);
@@ -1532,12 +1604,13 @@
                     Size = dim2(1, -2, 0, 35);
                     BorderSizePixel = 0;
                     TextSize = 16;
-                    BackgroundColor3 = rgb(19, 19, 21)
+                    BackgroundColor3 = rgb(28, 28, 32)
                 });
                 
                 library:create( "UIStroke" , {
-                    Color = rgb(23, 23, 29);
+                    Color = rgb(40, 40, 50);
                     Parent = items[ "button" ];
+                    Thickness = 1;
                     Enabled = false;
                     ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                 });
