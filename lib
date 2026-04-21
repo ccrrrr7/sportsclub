@@ -1029,9 +1029,6 @@
             end 
 
             function cfg.toggle_menu(bool) 
-                if cfg.tween then 
-                    cfg.tween:Cancel()
-                end 
 
                 if bool then
                     -- Opening animation
