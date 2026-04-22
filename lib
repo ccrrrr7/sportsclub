@@ -766,12 +766,13 @@
     --
     
     -- Library element functions
+    local isMobile = game:GetService("UserInputService").TouchEnabled
         function library:window(properties)
             local cfg = { 
                 suffix = properties.suffix or properties.Suffix or "sports";
                 name = properties.name or properties.Name or "club";
                 game_name = properties.gameInfo or properties.game_info or properties.GameInfo or "Milenium for Counter-Strike: Global Offensive";
-                size = properties.size or properties.Size or dim2(0, 700, 0, 600);
+                size = properties.size or properties.Size or (isMobile and dim2(0, 550, 0, 430) or dim2(0, 700, 0, 600))
                 selected_tab;
                 items = {};
 
