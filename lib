@@ -432,52 +432,60 @@
             library.size_lock_gui = sg
         end
 
-function library:draggify(frame)
-    library:ensure_size_lock_gui()
+        function library:draggify(frame)
+            library:ensure_size_lock_gui()
 
-    local dragging = false
-    local start_size = frame.Position
-    local start
+            local dragging = false 
+            local start_size = frame.Position
+            local start 
 
-    library:connection(frame.InputBegan, function(input)
-        if library:is_size_locked() then
-            return
-        end
+            library:connection(frame.InputBegan, function(input)
+                if library:is_size_locked() then
+                    return
+                end
 
-        if library:is_primary_input(input) then
-            dragging = true
-            start = input.Position
-            start_size = frame.Position
-        end
-    end)
+                if library:is_primary_input(input) then
+                    dragging = true
+                    start = input.Position
+                    start_size = frame.Position
+                end
+            end)
 
-    library:connection(frame.InputEnded, function(input)
-        if library:is_primary_input(input) then
-            dragging = false
-        end
-    end)
+            library:connection(frame.InputEnded, function(input)
+                if library:is_primary_input(input) then
+                    dragging = false
+                end
+            end)
 
-    library:connection(uis.InputChanged, function(input, game_event)
-        if library:is_size_locked() then
-            return
-        end
+            library:connection(uis.InputChanged, function(input, game_event) 
+                if library:is_size_locked() then
+                    return
+                end
 
-        if dragging and library:is_pointer_movement(input) then
-            local viewport_x = camera.ViewportSize.X
-            local viewport_y = camera.ViewportSize.Y
+                if dragging and library:is_pointer_movement(input) then
+                    local viewport_x = camera.ViewportSize.X
+                    local viewport_y = camera.ViewportSize.Y
 
-            local current_position = dim2(
-                0,
-                start_size.X.Offset + (input.Position.X - start.X),
-                0,
-                start_size.Y.Offset + (input.Position.Y - start.Y)
-            )
+                    local current_position = dim2(
+                        0,
+                        clamp(
+                            start_size.X.Offset + (input.Position.X - start.X),
+                            0,
+                            viewport_x - frame.Size.X.Offset
+                        ),
+                        0,
+                        math.clamp(
+                            start_size.Y.Offset + (input.Position.Y - start.Y),
+                            0,
+                            viewport_y - frame.Size.Y.Offset
+                        )
+                    )
 
-            frame.Position = current_position
-            library:close_element()
-        end
-    end)
-end
+                    frame.Position = current_position
+                    library:close_element()
+                end
+            end)
+        end 
 
         function library:convert(str)
             local values = {}
@@ -758,13 +766,12 @@ end
     --
     
     -- Library element functions
-    local isMobile = game:GetService("UserInputService").TouchEnabled
         function library:window(properties)
             local cfg = { 
                 suffix = properties.suffix or properties.Suffix or "sports";
                 name = properties.name or properties.Name or "club";
                 game_name = properties.gameInfo or properties.game_info or properties.GameInfo or "Milenium for Counter-Strike: Global Offensive";
-                size = properties.size or properties.Size or (isMobile and dim2(0, 550, 0, 430) or dim2(0, 700, 0, 600))
+                size = properties.size or properties.Size or dim2(0, 700, 0, 600);
                 selected_tab;
                 items = {};
 
