@@ -378,7 +378,7 @@
             end
 
             if library:is_mobile() then
-                return dim2(0, 340, 0, 360)
+                return dim2(0, 450, 0, 340)
             end
 
             return dim2(571, 630)
