@@ -981,7 +981,7 @@
                     BackgroundColor3 = rgb(21, 21, 23)
                 });
                 
-                items[ "button_holder" ] = library:create( cfg.mobile and "ScrollingFrame" or "Frame" , {
+                items[ "button_holder" ] = library:create( "Frame" , {
                     Parent = items[ "side_frame" ];
                     Name = "\0";
                     BackgroundTransparency = 1;
@@ -991,16 +991,6 @@
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(255, 255, 255)
                 }); cfg.button_holder = items[ "button_holder" ];
-
-                if cfg.mobile then
-                    items[ "button_holder" ].CanvasSize = dim2(0, 0, 0, 0)
-                    items[ "button_holder" ].AutomaticCanvasSize = Enum.AutomaticSize.Y
-                    items[ "button_holder" ].ScrollingDirection = Enum.ScrollingDirection.Y
-                    items[ "button_holder" ].ScrollBarThickness = 2
-                    items[ "button_holder" ].ScrollBarImageColor3 = themes.preset.accent
-                    items[ "button_holder" ].Active = true
-                    items[ "button_holder" ].ClipsDescendants = true
-                end
                 
                 library:create( "UIListLayout" , {
                     Parent = items[ "button_holder" ];
@@ -1269,7 +1259,7 @@
                 -- 
 
                 -- Multi Sections
-                    items[ "multi_section_button_holder" ] = library:create( self.mobile and "ScrollingFrame" or "Frame" , {
+                    items[ "multi_section_button_holder" ] = library:create( "Frame" , {
                         Parent = library.cache;
                         BackgroundTransparency = 1;
                         Name = "\0";
@@ -1279,16 +1269,6 @@
                         BorderSizePixel = 0;
                         BackgroundColor3 = rgb(255, 255, 255)
                     });
-
-                    if self.mobile then
-                        items[ "multi_section_button_holder" ].CanvasSize = dim2(0, 0, 0, 0)
-                        items[ "multi_section_button_holder" ].AutomaticCanvasSize = Enum.AutomaticSize.X
-                        items[ "multi_section_button_holder" ].ScrollingDirection = Enum.ScrollingDirection.X
-                        items[ "multi_section_button_holder" ].ScrollBarThickness = 2
-                        items[ "multi_section_button_holder" ].ScrollBarImageColor3 = themes.preset.accent
-                        items[ "multi_section_button_holder" ].Active = true
-                        items[ "multi_section_button_holder" ].ClipsDescendants = true
-                    end
                     
                     library:create( "UIListLayout" , {
                         Parent = items[ "multi_section_button_holder" ];
