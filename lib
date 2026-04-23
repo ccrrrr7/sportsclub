@@ -282,14 +282,21 @@
                 end
             end)
 
+            library:connection(uis.InputEnded, function(input)
+                if library:is_primary_input(input) then
+                    resizing = false
+                end
+            end)
+
             library:connection(uis.InputChanged, function(input, game_event) 
                 if library:is_size_locked() then
                     return
                 end
 
                 if resizing and library:is_pointer_movement(input) then
-                    local viewport_x = camera.ViewportSize.X
-                    local viewport_y = camera.ViewportSize.Y
+                    local viewport_size = library:get_viewport_size()
+                    local viewport_x = viewport_size.X
+                    local viewport_y = viewport_size.Y
                     local min_pad = uis.TouchEnabled and 40 or 0
                     local min_w = uis.TouchEnabled and floor(og_size.X.Offset * 0.2) or og_size.X.Offset
                     local min_h = uis.TouchEnabled and floor(og_size.Y.Offset * 0.2) or og_size.Y.Offset
@@ -310,6 +317,7 @@
                     )
 
                     frame.Size = current_size
+                    library:fit_to_viewport(frame)
                 end
             end)
         end 
@@ -344,6 +352,62 @@
 
         function library:is_pointer_movement(input)
             return input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch
+        end
+
+        function library:is_mobile()
+            return uis.TouchEnabled
+        end
+
+        function library:get_viewport_size()
+            camera = ws.CurrentCamera or camera
+
+            if camera then
+                return camera.ViewportSize
+            end
+
+            return vec2(800, 600)
+        end
+
+        function library:get_window_size(properties)
+            properties = properties or {}
+
+            local requested_size = properties.size or properties.Size
+
+            if requested_size then
+                return requested_size
+            end
+
+            if library:is_mobile() then
+                return dim2(0, 500, 0, 500)
+            end
+
+            return dim2(0, 700, 0, 600)
+        end
+
+        function library:get_drag_bounds(frame)
+            local viewport_size = library:get_viewport_size()
+            local visible_x = library:is_mobile() and 84 or 120
+            local visible_y = library:is_mobile() and 44 or 56
+            local frame_x = max(frame.AbsoluteSize.X, frame.Size.X.Offset)
+            local frame_y = max(frame.AbsoluteSize.Y, frame.Size.Y.Offset)
+
+            return {
+                min_x = -(frame_x - visible_x),
+                max_x = viewport_size.X - visible_x,
+                min_y = -(frame_y - visible_y),
+                max_y = viewport_size.Y - visible_y,
+            }
+        end
+
+        function library:fit_to_viewport(frame)
+            local bounds = library:get_drag_bounds(frame)
+
+            frame.Position = dim2(
+                0,
+                clamp(frame.Position.X.Offset, bounds.min_x, bounds.max_x),
+                0,
+                clamp(frame.Position.Y.Offset, bounds.min_y, bounds.max_y)
+            )
         end
 
         function library:is_size_locked()
@@ -413,6 +477,12 @@
                 end
             end)
 
+            library:connection(uis.InputEnded, function(input)
+                if library:is_primary_input(input) then
+                    dragging = false
+                end
+            end)
+
             library:connection(uis.InputChanged, function(input)
                 if dragging and library:is_pointer_movement(input) then
                     lock_btn.Position = dim2(
@@ -457,27 +527,32 @@
                 end
             end)
 
+            library:connection(uis.InputEnded, function(input)
+                if library:is_primary_input(input) then
+                    dragging = false
+                end
+            end)
+
             library:connection(uis.InputChanged, function(input, game_event) 
                 if library:is_size_locked() then
                     return
                 end
 
                 if dragging and library:is_pointer_movement(input) then
-                    local viewport_x = camera.ViewportSize.X
-                    local viewport_y = camera.ViewportSize.Y
+                    local bounds = library:get_drag_bounds(frame)
 
                     local current_position = dim2(
                         0,
                         clamp(
                             start_size.X.Offset + (input.Position.X - start.X),
-                            0,
-                            viewport_x - frame.Size.X.Offset
+                            bounds.min_x,
+                            bounds.max_x
                         ),
                         0,
-                        math.clamp(
+                        clamp(
                             start_size.Y.Offset + (input.Position.Y - start.Y),
-                            0,
-                            viewport_y - frame.Size.Y.Offset
+                            bounds.min_y,
+                            bounds.max_y
                         )
                     )
 
@@ -771,12 +846,22 @@
                 suffix = properties.suffix or properties.Suffix or "sports";
                 name = properties.name or properties.Name or "club";
                 game_name = properties.gameInfo or properties.game_info or properties.GameInfo or "Milenium for Counter-Strike: Global Offensive";
-                size = properties.size or properties.Size or dim2(0, 700, 0, 600);
+                size = library:get_window_size(properties);
+                mobile = library:is_mobile();
                 selected_tab;
                 items = {};
 
                 tween;
             }
+
+            cfg.side_width = cfg.mobile and 150 or 196
+            cfg.header_height = cfg.mobile and 50 or 56
+            cfg.footer_height = 25
+            cfg.tab_gap = 20
+            cfg.button_top = cfg.mobile and 52 or 60
+            cfg.title_height = cfg.mobile and 56 or 70
+            cfg.tab_button_height = cfg.mobile and 32 or 35
+            cfg.text_size = cfg.mobile and 15 or 16
             
             library[ "items" ] = library:create( "ScreenGui" , {
                 Parent = coregui;
@@ -804,6 +889,7 @@
                     BorderSizePixel = 0;
                     BackgroundColor3 = themes.preset.window
                 }); library:apply_theme(items[ "main" ], "window", "BackgroundColor3"); items[ "main" ].Position = dim2(0, items[ "main" ].AbsolutePosition.X, 0, items[ "main" ].AbsolutePosition.Y)
+                library:fit_to_viewport(items[ "main" ])
                 
                 library:create( "UICorner" , {
                     Parent = items[ "main" ];
@@ -821,7 +907,7 @@
                     BackgroundTransparency = 1;
                     Name = "\0";
                     BorderColor3 = rgb(0, 0, 0);
-                    Size = dim2(0, 196, 1, -25);
+                    Size = dim2(0, cfg.side_width, 1, -cfg.footer_height);
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(14, 14, 16)
                 });
@@ -840,9 +926,9 @@
                     Parent = items[ "side_frame" ];
                     Name = "\0";
                     BackgroundTransparency = 1;
-                    Position = dim2(0, 0, 0, 60);
+                    Position = dim2(0, 0, 0, cfg.button_top);
                     BorderColor3 = rgb(0, 0, 0);
-                    Size = dim2(1, 0, 1, -60);
+                    Size = dim2(1, 0, 1, -cfg.button_top);
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(255, 255, 255)
                 }); cfg.button_holder = items[ "button_holder" ];
@@ -870,11 +956,11 @@
                     Name = "\0";
                     Text = string.format('<u>%s</u><font color = "rgb(255, 255, 255)">%s</font>', cfg.name, cfg.suffix);
                     BackgroundTransparency = 1;
-                    Size = dim2(1, 0, 0, 70);
+                    Size = dim2(1, 0, 0, cfg.title_height);
                     TextColor3 = themes.preset.accent;
                     BorderSizePixel = 0;
                     RichText = true;
-                    TextSize = 30;
+                    TextSize = cfg.mobile and 24 or 30;
                     BackgroundColor3 = rgb(255, 255, 255)
                 }); library:apply_theme(items[ "title" ], "accent", "TextColor3");
                 
@@ -882,9 +968,9 @@
                     Parent = items[ "main" ];
                     Name = "\0";
                     BackgroundTransparency = 1;
-                    Position = dim2(0, 196, 0, 0);
+                    Position = dim2(0, cfg.side_width, 0, 0);
                     BorderColor3 = rgb(0, 0, 0);
-                    Size = dim2(1, -196, 0, 56);
+                    Size = dim2(1, -cfg.side_width, 0, cfg.header_height);
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(255, 255, 255)
                 }); cfg.multi_holder = items[ "multi_holder" ];
@@ -921,9 +1007,9 @@
                     Parent = items[ "main" ];
                     Name = "\0";
                     BackgroundTransparency = 1;
-                    Position = dim2(0, 196, 0, 56);
+                    Position = dim2(0, cfg.side_width, 0, cfg.header_height);
                     BorderColor3 = rgb(0, 0, 0);
-                    Size = dim2(1, -196, 1, -81);
+                    Size = dim2(1, -cfg.side_width, 1, -(cfg.header_height + cfg.footer_height));
                     BorderSizePixel = 0;
                     BackgroundColor3 = themes.preset.window;
                     ZIndex = 2;
@@ -1037,9 +1123,9 @@
                     Name = "\0";
                     Visible = false;
                     BackgroundTransparency = 1;
-                    Position = dim2(0, 196, 0, 56);
+                    Position = dim2(0, self.side_width, 0, self.header_height);
                     BorderColor3 = rgb(0, 0, 0);
-                    Size = dim2(1, -216, 1, -101);
+                    Size = dim2(1, -(self.side_width + self.tab_gap), 1, -(self.header_height + self.footer_height + self.tab_gap));
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(255, 255, 255)
                 });
@@ -1054,9 +1140,9 @@
                         AutoButtonColor = false;
                         BackgroundTransparency = 1;
                         Name = "\0";
-                        Size = dim2(1, 0, 0, 35);
+                        Size = dim2(1, 0, 0, self.tab_button_height);
                         BorderSizePixel = 0;
-                        TextSize = 16;
+                        TextSize = self.text_size;
                         BackgroundColor3 = rgb(29, 29, 29)
                     });
                     
@@ -1069,7 +1155,7 @@
                         BackgroundTransparency = 1;
                         Position = dim2(0, 10, 0.5, 0);
                         Name = "\0";
-                        Size = dim2(0, 22, 0, 22);
+                        Size = self.mobile and dim2(0, 20, 0, 20) or dim2(0, 22, 0, 22);
                         BorderSizePixel = 0;
                         BackgroundColor3 = rgb(255, 255, 255)
                     }); library:apply_theme(items[ "icon" ], "accent", "ImageColor3");
@@ -1087,7 +1173,7 @@
                         TextXAlignment = Enum.TextXAlignment.Left;
                         BorderSizePixel = 0;
                         AutomaticSize = Enum.AutomaticSize.X;
-                        TextSize = 16;
+                        TextSize = self.text_size;
                         BackgroundColor3 = rgb(255, 255, 255)
                     });
                     
@@ -1150,12 +1236,12 @@
                                     Text = "";
                                     Parent = items[ "multi_section_button_holder" ];
                                     Name = "\0";
-                                    Size = dim2(0, 0, 0, 39);
+                                    Size = dim2(0, 0, 0, self.mobile and 35 or 39);
                                     BackgroundTransparency = 1;
                                     ClipsDescendants = true;
                                     BorderSizePixel = 0;
                                     AutomaticSize = Enum.AutomaticSize.X;
-                                    TextSize = 16;
+                                    TextSize = self.text_size;
                                     BackgroundColor3 = rgb(25, 25, 29)
                                 });
                                 
@@ -1171,7 +1257,7 @@
                                     TextXAlignment = Enum.TextXAlignment.Left;
                                     BorderSizePixel = 0;
                                     AutomaticSize = Enum.AutomaticSize.XY;
-                                    TextSize = 16;
+                                    TextSize = self.text_size;
                                     BackgroundColor3 = rgb(255, 255, 255)
                                 });
                                 
@@ -1241,6 +1327,7 @@
                             --
                         end
 
+                        data.mobile = self.mobile
                         data.text = multi_items[ "name" ]
                         data.accent = multi_items[ "accent" ]
                         data.button = multi_items[ "button" ]
@@ -1303,7 +1390,7 @@
                         self.items[ "global_fade" ].BackgroundTransparency = 0
                         
                         library:tween(self.items[ "global_fade" ], {BackgroundTransparency = 1}, Enum.EasingStyle.Quad, 0.4)
-                        selected_tab[ 4 ].Size = dim2(1, -216, 1, -101)
+                        selected_tab[ 4 ].Size = dim2(1, -(self.side_width + self.tab_gap), 1, -(self.header_height + self.footer_height + self.tab_gap))
                     end
 
                     library:tween(selected_tab[ 1 ], {BackgroundTransparency = 1})
@@ -1319,7 +1406,7 @@
                 library:tween(items[ "button" ], {BackgroundTransparency = 0})
                 library:tween(items[ "icon" ], {ImageColor3 = themes.preset.accent})
                 library:tween(items[ "name" ], {TextColor3 = rgb(255, 255, 255)})
-                library:tween(items[ "tab_holder" ], {Size = dim2(1, -196, 1, -81)}, Enum.EasingStyle.Quad, 0.4)
+                library:tween(items[ "tab_holder" ], {Size = dim2(1, -self.side_width, 1, -(self.header_height + self.footer_height))}, Enum.EasingStyle.Quad, 0.4)
                 
                 items[ "tab_holder" ].Visible = true 
                 items[ "tab_holder" ].Parent = self.items[ "main" ]
@@ -1427,7 +1514,7 @@
                     });
                     
                     library:create( "UIListLayout" , {
-                        FillDirection = Enum.FillDirection.Horizontal;
+                        FillDirection = self.mobile and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal;
                         HorizontalFlex = Enum.UIFlexAlignment.Fill;
                         VerticalFlex = Enum.UIFlexAlignment.Fill;
                         Parent = items[ "tab_parent" ];
