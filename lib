@@ -378,7 +378,7 @@
             end
 
             if library:is_mobile() then
-                return dim2(0, 450, 0, 340)
+                return dim2(0, 460, 0, 385)
             end
 
             return dim2(571, 630)
@@ -429,15 +429,43 @@
                 ZIndexBehavior = Enum.ZIndexBehavior.Global;
             })
 
-            local lock_btn = library:create("TextButton", {
-                Name = "size_lock";
+            local helper_holder = library:create("Frame", {
+                Name = "mobile_menu_controls";
                 Parent = sg;
                 AnchorPoint = vec2(0, 0);
-                Position = dim2(0, 6, 0, 6);
+                Position = dim2(0, 6, 0, gui_offset + 10);
+                Size = dim2(0, 84, 0, 66);
+                BackgroundTransparency = 1;
+                BorderSizePixel = 0;
+                ZIndex = 1000;
+            })
+
+            local lock_btn = library:create("TextButton", {
+                Name = "size_lock";
+                Parent = helper_holder;
+                AnchorPoint = vec2(0, 0);
+                Position = dim2(0, 0, 0, 0);
                 Size = dim2(0, 84, 0, 30);
                 BackgroundColor3 = rgb(18, 18, 22);
                 BorderSizePixel = 0;
                 Text = getgenv().size_locked and "Unlock" or "Lock";
+                TextColor3 = rgb(235, 235, 235);
+                TextSize = 14;
+                FontFace = fonts.font;
+                AutoButtonColor = false;
+                ZIndex = 1000;
+                Visible = true;
+            })
+
+            local menu_btn = library:create("TextButton", {
+                Name = "menu_toggle";
+                Parent = helper_holder;
+                AnchorPoint = vec2(0, 0);
+                Position = dim2(0, 0, 0, 36);
+                Size = dim2(0, 84, 0, 30);
+                BackgroundColor3 = rgb(18, 18, 22);
+                BorderSizePixel = 0;
+                Text = "Close";
                 TextColor3 = rgb(235, 235, 235);
                 TextSize = 14;
                 FontFace = fonts.font;
@@ -457,6 +485,26 @@
                 Thickness = 1;
             })
 
+            library:create("UICorner", {
+                Parent = menu_btn;
+                CornerRadius = dim(0, 6);
+            })
+
+            library:create("UIStroke", {
+                Parent = menu_btn;
+                Color = rgb(42, 42, 50);
+                Thickness = 1;
+            })
+
+            function library:update_mobile_menu_button()
+                if not library.mobile_menu_button then
+                    return
+                end
+
+                local menu_open = not library[ "items" ] or library[ "items" ].Enabled
+                library.mobile_menu_button.Text = menu_open and "Close" or "Open"
+            end
+
             local dragging = false
             local start
             local start_pos
@@ -468,7 +516,7 @@
 
                 dragging = true
                 start = input.Position
-                start_pos = lock_btn.Position
+                start_pos = helper_holder.Position
             end)
 
             library:connection(lock_btn.InputEnded, function(input)
@@ -485,7 +533,7 @@
 
             library:connection(uis.InputChanged, function(input)
                 if dragging and library:is_pointer_movement(input) then
-                    lock_btn.Position = dim2(
+                    helper_holder.Position = dim2(
                         0,
                         start_pos.X.Offset + (input.Position.X - start.X),
                         0,
@@ -499,6 +547,17 @@
                 lock_btn.Text = getgenv().size_locked and "Unlock" or "Lock"
             end)
 
+            library:connection(menu_btn.MouseButton1Click, function()
+                if not library[ "items" ] then
+                    return
+                end
+
+                library[ "items" ].Enabled = not library[ "items" ].Enabled
+                library:update_mobile_menu_button()
+            end)
+
+            library.mobile_menu_button = menu_btn
+            library:update_mobile_menu_button()
             library.size_lock_gui = sg
         end
 
@@ -1099,6 +1158,9 @@
                 -- cfg.tween = 
                 
                 library[ "items" ].Enabled = bool
+                if library.update_mobile_menu_button then
+                    library:update_mobile_menu_button()
+                end
             end 
                 
             return setmetatable(cfg, library)
