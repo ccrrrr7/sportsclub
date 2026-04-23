@@ -981,7 +981,7 @@
                     BackgroundColor3 = rgb(21, 21, 23)
                 });
                 
-                items[ "button_holder" ] = library:create( "ScrollingFrame" , {
+                items[ "button_holder" ] = library:create( cfg.mobile and "ScrollingFrame" or "Frame" , {
                     Parent = items[ "side_frame" ];
                     Name = "\0";
                     BackgroundTransparency = 1;
@@ -989,15 +989,18 @@
                     BorderColor3 = rgb(0, 0, 0);
                     Size = dim2(1, 0, 1, -cfg.button_top);
                     BorderSizePixel = 0;
-                    BackgroundColor3 = rgb(255, 255, 255);
-                    CanvasSize = dim2(0, 0, 0, 0);
-                    AutomaticCanvasSize = Enum.AutomaticSize.Y;
-                    ScrollingDirection = Enum.ScrollingDirection.Y;
-                    ScrollBarThickness = cfg.mobile and 2 or 0;
-                    ScrollBarImageColor3 = themes.preset.accent;
-                    Active = true;
-                    ClipsDescendants = true
+                    BackgroundColor3 = rgb(255, 255, 255)
                 }); cfg.button_holder = items[ "button_holder" ];
+
+                if cfg.mobile then
+                    items[ "button_holder" ].CanvasSize = dim2(0, 0, 0, 0)
+                    items[ "button_holder" ].AutomaticCanvasSize = Enum.AutomaticSize.Y
+                    items[ "button_holder" ].ScrollingDirection = Enum.ScrollingDirection.Y
+                    items[ "button_holder" ].ScrollBarThickness = 2
+                    items[ "button_holder" ].ScrollBarImageColor3 = themes.preset.accent
+                    items[ "button_holder" ].Active = true
+                    items[ "button_holder" ].ClipsDescendants = true
+                end
                 
                 library:create( "UIListLayout" , {
                     Parent = items[ "button_holder" ];
@@ -1266,7 +1269,7 @@
                 -- 
 
                 -- Multi Sections
-                    items[ "multi_section_button_holder" ] = library:create( "ScrollingFrame" , {
+                    items[ "multi_section_button_holder" ] = library:create( self.mobile and "ScrollingFrame" or "Frame" , {
                         Parent = library.cache;
                         BackgroundTransparency = 1;
                         Name = "\0";
@@ -1274,15 +1277,18 @@
                         BorderColor3 = rgb(0, 0, 0);
                         Size = dim2(1, 0, 1, 0);
                         BorderSizePixel = 0;
-                        BackgroundColor3 = rgb(255, 255, 255);
-                        CanvasSize = dim2(0, 0, 0, 0);
-                        AutomaticCanvasSize = Enum.AutomaticSize.X;
-                        ScrollingDirection = Enum.ScrollingDirection.X;
-                        ScrollBarThickness = self.mobile and 2 or 0;
-                        ScrollBarImageColor3 = themes.preset.accent;
-                        Active = true;
-                        ClipsDescendants = true
+                        BackgroundColor3 = rgb(255, 255, 255)
                     });
+
+                    if self.mobile then
+                        items[ "multi_section_button_holder" ].CanvasSize = dim2(0, 0, 0, 0)
+                        items[ "multi_section_button_holder" ].AutomaticCanvasSize = Enum.AutomaticSize.X
+                        items[ "multi_section_button_holder" ].ScrollingDirection = Enum.ScrollingDirection.X
+                        items[ "multi_section_button_holder" ].ScrollBarThickness = 2
+                        items[ "multi_section_button_holder" ].ScrollBarImageColor3 = themes.preset.accent
+                        items[ "multi_section_button_holder" ].Active = true
+                        items[ "multi_section_button_holder" ].ClipsDescendants = true
+                    end
                     
                     library:create( "UIListLayout" , {
                         Parent = items[ "multi_section_button_holder" ];
