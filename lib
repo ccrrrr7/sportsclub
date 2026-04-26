@@ -1244,7 +1244,6 @@
                         ScrollBarImageTransparency = library:is_mobile() and 1 or 0;
                         ScrollBarImageColor3 = rgb(44, 44, 46);
                         ElasticBehavior = Enum.ElasticBehavior.Always;
-                        ScrollBarInset = Enum.ScrollBarInset.ScrollBar;
                         ClipsDescendants = true;
                         BorderSizePixel = 0;
                         BackgroundColor3 = rgb(255, 255, 255)
