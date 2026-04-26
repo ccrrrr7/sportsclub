@@ -245,6 +245,48 @@
             return tween
         end
 
+        function library:is_mobile()
+            return uis.TouchEnabled
+        end
+
+        function library:get_window_size(properties)
+            local size = properties.size or properties.Size
+
+            if size then
+                return size
+            end
+
+            if library:is_mobile() then
+                return dim2(0, 450, 0, 340)
+            end
+
+            return dim2(0, 700, 0, 600)
+        end
+
+        function library:get_drag_bounds(frame)
+            local viewport_size = camera.ViewportSize
+            local visible_width = library:is_mobile() and 120 or 160
+            local visible_height = library:is_mobile() and 60 or 90
+
+            return {
+                min_x = visible_width - frame.Size.X.Offset;
+                max_x = viewport_size.X - visible_width;
+                min_y = 0;
+                max_y = viewport_size.Y - visible_height;
+            }
+        end
+
+        function library:fit_to_viewport(frame)
+            local drag_bounds = library:get_drag_bounds(frame)
+
+            frame.Position = dim2(
+                0,
+                clamp(frame.Position.X.Offset, drag_bounds.min_x, drag_bounds.max_x),
+                0,
+                clamp(frame.Position.Y.Offset, drag_bounds.min_y, drag_bounds.max_y)
+            )
+        end
+
         function library:resizify(frame) 
             library:ensure_size_lock_gui()
 
@@ -310,6 +352,7 @@
                     )
 
                     frame.Size = current_size
+                    library:fit_to_viewport(frame)
                 end
             end)
         end 
@@ -463,21 +506,20 @@
                 end
 
                 if dragging and library:is_pointer_movement(input) then
-                    local viewport_x = camera.ViewportSize.X
-                    local viewport_y = camera.ViewportSize.Y
+                    local drag_bounds = library:get_drag_bounds(frame)
 
                     local current_position = dim2(
                         0,
                         clamp(
                             start_size.X.Offset + (input.Position.X - start.X),
-                            0,
-                            viewport_x - frame.Size.X.Offset
+                            drag_bounds.min_x,
+                            drag_bounds.max_x
                         ),
                         0,
-                        math.clamp(
+                        clamp(
                             start_size.Y.Offset + (input.Position.Y - start.Y),
-                            0,
-                            viewport_y - frame.Size.Y.Offset
+                            drag_bounds.min_y,
+                            drag_bounds.max_y
                         )
                     )
 
@@ -771,7 +813,7 @@
                 suffix = properties.suffix or properties.Suffix or "sports";
                 name = properties.name or properties.Name or "club";
                 game_name = properties.gameInfo or properties.game_info or properties.GameInfo or "Milenium for Counter-Strike: Global Offensive";
-                size = properties.size or properties.Size or dim2(0, 700, 0, 600);
+                size = library:get_window_size(properties);
                 selected_tab;
                 items = {};
 
@@ -804,6 +846,7 @@
                     BorderSizePixel = 0;
                     BackgroundColor3 = themes.preset.window
                 }); library:apply_theme(items[ "main" ], "window", "BackgroundColor3"); items[ "main" ].Position = dim2(0, items[ "main" ].AbsolutePosition.X, 0, items[ "main" ].AbsolutePosition.Y)
+                library:fit_to_viewport(items[ "main" ])
                 
                 library:create( "UICorner" , {
                     Parent = items[ "main" ];
@@ -885,6 +928,7 @@
                     Position = dim2(0, 196, 0, 0);
                     BorderColor3 = rgb(0, 0, 0);
                     Size = dim2(1, -196, 0, 56);
+                    ClipsDescendants = true;
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(255, 255, 255)
                 }); cfg.multi_holder = items[ "multi_holder" ];
@@ -1000,6 +1044,9 @@
             do -- Other
                 library:draggify(items[ "main" ])
                 library:resizify(items[ "main" ])
+                library:connection(camera:GetPropertyChangedSignal("ViewportSize"), function()
+                    library:fit_to_viewport(items[ "main" ])
+                end)
             end 
 
             function cfg.toggle_menu(bool) 
@@ -1111,13 +1158,21 @@
                 -- 
 
                 -- Multi Sections
-                    items[ "multi_section_button_holder" ] = library:create( "Frame" , {
+                    items[ "multi_section_button_holder" ] = library:create( "ScrollingFrame" , {
                         Parent = library.cache;
                         BackgroundTransparency = 1;
                         Name = "\0";
                         Visible = false;
+                        Active = true;
                         BorderColor3 = rgb(0, 0, 0);
                         Size = dim2(1, 0, 1, 0);
+                        ScrollingDirection = Enum.ScrollingDirection.X;
+                        AutomaticCanvasSize = Enum.AutomaticSize.X;
+                        CanvasSize = dim2(0, 0, 0, 0);
+                        ScrollBarThickness = library:is_mobile() and 0 or 2;
+                        ScrollBarImageTransparency = library:is_mobile() and 1 or 0;
+                        ScrollBarImageColor3 = rgb(44, 44, 46);
+                        ClipsDescendants = true;
                         BorderSizePixel = 0;
                         BackgroundColor3 = rgb(255, 255, 255)
                     });
