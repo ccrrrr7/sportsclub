@@ -1237,17 +1237,20 @@
                         BorderColor3 = rgb(0, 0, 0);
                         Size = dim2(1, 0, 1, 0);
                         ScrollingDirection = Enum.ScrollingDirection.X;
-                        AutomaticCanvasSize = Enum.AutomaticSize.X;
+                        ScrollingEnabled = true;
+                        AutomaticCanvasSize = Enum.AutomaticSize.None;
                         CanvasSize = dim2(0, 0, 0, 0);
                         ScrollBarThickness = library:is_mobile() and 0 or 2;
                         ScrollBarImageTransparency = library:is_mobile() and 1 or 0;
                         ScrollBarImageColor3 = rgb(44, 44, 46);
+                        ElasticBehavior = Enum.ElasticBehavior.Always;
+                        ScrollBarInset = Enum.ScrollBarInset.ScrollBar;
                         ClipsDescendants = true;
                         BorderSizePixel = 0;
                         BackgroundColor3 = rgb(255, 255, 255)
                     });
                     
-                    library:create( "UIListLayout" , {
+                    local multi_section_layout = library:create( "UIListLayout" , {
                         Parent = items[ "multi_section_button_holder" ];
                         Padding = dim(0, 7);
                         SortOrder = Enum.SortOrder.LayoutOrder;
@@ -1260,7 +1263,15 @@
                         Parent = items[ "multi_section_button_holder" ];
                         PaddingRight = dim(0, 7);
                         PaddingLeft = dim(0, 7)
-                    });                        
+                    });
+
+                    local function update_multi_section_canvas()
+                        local content_width = multi_section_layout.AbsoluteContentSize.X + 14
+                        items[ "multi_section_button_holder" ].CanvasSize = dim2(0, math_max(items[ "multi_section_button_holder" ].AbsoluteSize.X, content_width), 0, 0)
+                    end
+
+                    library:connection(multi_section_layout:GetPropertyChangedSignal("AbsoluteContentSize"), update_multi_section_canvas)
+                    library:connection(items[ "multi_section_button_holder" ]:GetPropertyChangedSignal("AbsoluteSize"), update_multi_section_canvas)
 
                     for _, section in cfg.tabs do
                         local data = {items = {}} 
@@ -1416,6 +1427,7 @@
 						cfg.pages[#cfg.pages + 1] = setmetatable(data, library)
                     end 
 
+                    update_multi_section_canvas()
                     cfg.pages[1].open_page()
                 --
             end 
@@ -1450,6 +1462,7 @@
                 items[ "tab_holder" ].Parent = self.items[ "main" ]
                 items[ "multi_section_button_holder" ].Visible = true 
                 items[ "multi_section_button_holder" ].Parent = self.items[ "multi_holder" ]
+                items[ "multi_section_button_holder" ].CanvasPosition = vec2(0, 0)
 
                 self.selected_tab = {
                     items[ "button" ];
