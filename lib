@@ -76,7 +76,13 @@
         },
         flags = {},
         config_flags = {},
-        connections = {},   
+        connections = {},
+        style_state = {
+            menu_scale = 1,
+            window_transparency = 0,
+            section_transparency = 0,
+            shadow_transparency = 1,
+        },
         notifications = {notifs = {}},
         current_open; 
     }
@@ -629,8 +635,124 @@
 
         local config_holder;
         local style_holder;
-        local config_autoload_path = library.directory .. "/autoload.txt"
         local style_autoload_path = library.directory .. "/style_autoload.txt"
+
+        function library:get_place_config_directory()
+            local config_root = library.directory .. "/configs"
+            local place_directory = config_root .. "/" .. tostring(game.PlaceId)
+
+            if not isfolder(config_root) then
+                makefolder(config_root)
+            end
+
+            if not isfolder(place_directory) then
+                makefolder(place_directory)
+            end
+
+            return place_directory
+        end
+
+        function library:get_config_autoload_path()
+            return library:get_place_config_directory() .. "/autoload.txt"
+        end
+
+        function library:sanitize_storage_name(name)
+            local sanitized_name = tostring(name or ""):gsub("[%c\\/:*?\"<>|]", ""):gsub("^%s+", ""):gsub("%s+$", "")
+            return sanitized_name
+        end
+
+        function library:get_config_path(name)
+            local sanitized_name = library:sanitize_storage_name(name)
+            if sanitized_name == "" then
+                return nil, "missing config name"
+            end
+
+            return library:get_place_config_directory() .. "/" .. sanitized_name .. ".cfg", sanitized_name
+        end
+
+        function library:get_style_path(name)
+            local sanitized_name = library:sanitize_storage_name(name)
+            if sanitized_name == "" then
+                return nil, "missing style name"
+            end
+
+            return library.directory .. "/styling/" .. sanitized_name .. ".cfg", sanitized_name
+        end
+
+        function library:read_json_file(path)
+            local success, result = pcall(function()
+                return readfile(path)
+            end)
+
+            if not success then
+                return nil, "read failed: " .. tostring(result)
+            end
+
+            return result
+        end
+
+        function library:write_json_file(path, payload)
+            local success, result = pcall(function()
+                writefile(path, payload)
+            end)
+
+            if not success then
+                return false, "write failed: " .. tostring(result)
+            end
+
+            return true
+        end
+
+        function library:delete_json_file(path)
+            local success, result = pcall(function()
+                delfile(path)
+            end)
+
+            if not success then
+                return false, "delete failed: " .. tostring(result)
+            end
+
+            return true
+        end
+
+        function library:update_menu_scale(value)
+            local menu_scale = clamp(tonumber(value) or 1, 0.7, 1.4)
+            library.style_state.menu_scale = menu_scale
+
+            if library.menu_scale_instance then
+                library.menu_scale_instance.Scale = menu_scale
+            end
+        end
+
+        function library:update_theme_transparency(theme_name, transparency)
+            local normalized_value = clamp(tonumber(transparency) or 0, 0, 1)
+
+            if theme_name == "window" then
+                library.style_state.window_transparency = normalized_value
+            elseif theme_name == "section" then
+                library.style_state.section_transparency = normalized_value
+            end
+
+            local utility_bucket = themes.utility[theme_name]
+            if not utility_bucket or not utility_bucket.BackgroundColor3 then
+                return
+            end
+
+            for _, object in utility_bucket.BackgroundColor3 do
+                if object and object.Parent then
+                    object.BackgroundTransparency = normalized_value
+                end
+            end
+        end
+
+        function library:update_shadow_transparency(value)
+            local transparency = clamp(tonumber(value) or 1, 0, 1)
+            library.style_state.shadow_transparency = transparency
+
+            if library.menu_window and library.menu_window.items and library.menu_window.items["shadow"] then
+                library.menu_window.items["shadow"].ImageTransparency = transparency
+            end
+        end
 
         function library:update_config_list() 
             if not config_holder then 
@@ -638,13 +760,23 @@
             end
             
             local list = {}
-            
-            for idx, file in listfiles(library.directory .. "/configs") do
-                local name = file:match("([^\\/]+)%.cfg$")
-                if name then
-                    list[#list + 1] = name
+
+            local success, files = pcall(function()
+                return listfiles(library:get_place_config_directory())
+            end)
+
+            if success and files then
+                for _, file in files do
+                    local name = file:match("([^\\/]+)%.cfg$")
+                    if name then
+                        list[#list + 1] = name
+                    end
                 end
             end
+
+            table.sort(list, function(left_name, right_name)
+                return tostring(left_name):lower() < tostring(right_name):lower()
+            end)
 
             config_holder.refresh_options(list)
         end 
@@ -656,77 +788,129 @@
 
             local list = {}
 
-            for idx, file in listfiles(library.directory .. "/styling") do
-                local name = file:match("([^\\/]+)%.cfg$")
-                if name then
-                    list[#list + 1] = name
+            local success, files = pcall(function()
+                return listfiles(library.directory .. "/styling")
+            end)
+
+            if success and files then
+                for _, file in files do
+                    local name = file:match("([^\\/]+)%.cfg$")
+                    if name then
+                        list[#list + 1] = name
+                    end
                 end
             end
+
+            table.sort(list, function(left_name, right_name)
+                return tostring(left_name):lower() < tostring(right_name):lower()
+            end)
 
             style_holder.refresh_options(list)
         end
 
         function library:get_style()
-            local Style = {}
+            local style_payload = {
+                themes = {},
+                settings = {
+                    menu_scale = library.style_state.menu_scale,
+                    window_transparency = library.style_state.window_transparency,
+                    section_transparency = library.style_state.section_transparency,
+                    shadow_transparency = library.style_state.shadow_transparency,
+                }
+            }
 
             for theme_name, theme_color in themes.preset do
-                Style[theme_name] = theme_color:ToHex()
+                style_payload.themes[theme_name] = theme_color:ToHex()
             end
 
-            return http_service:JSONEncode(Style)
+            return http_service:JSONEncode(style_payload)
         end
 
         function library:load_style(style_json)
             local style = http_service:JSONDecode(style_json)
+            local theme_values = style.themes or style
+            local style_settings = style.settings or {}
 
-            for theme_name, value in style do
+            for theme_name, value in theme_values do
                 if themes.preset[theme_name] then
                     library:update_theme(theme_name, hex(value))
                 end
             end
+
+            library:update_menu_scale(style_settings.menu_scale or 1)
+            library:update_theme_transparency("window", style_settings.window_transparency or 0)
+            library:update_theme_transparency("section", style_settings.section_transparency or 0)
+            library:update_shadow_transparency(style_settings.shadow_transparency ~= nil and style_settings.shadow_transparency or 1)
         end
 
         function library:save_style(name)
-            if not name or name == "" then
-                return false, "missing style name"
+            local path, sanitize_result = library:get_style_path(name)
+            if not path then
+                return false, sanitize_result
             end
 
-            writefile(library.directory .. "/styling/" .. name .. ".cfg", library:get_style())
+            local payload_success, payload_result = pcall(function()
+                return library:get_style()
+            end)
+            if not payload_success then
+                return false, "style encode failed: " .. tostring(payload_result)
+            end
+
+            local write_success, write_result = library:write_json_file(path, payload_result)
+            if not write_success then
+                return false, write_result
+            end
+
             library:update_style_list()
 
-            return true
+            return true, sanitize_result
         end
 
         function library:load_style_from_name(name)
-            if not name or name == "" then
-                return false, "missing style name"
+            local path, sanitize_result = library:get_style_path(name)
+            if not path then
+                return false, sanitize_result
             end
 
-            local path = library.directory .. "/styling/" .. name .. ".cfg"
             if not isfile(path) then
                 return false, "style file missing"
             end
 
-            library:load_style(readfile(path))
+            local read_result, read_error = library:read_json_file(path)
+            if not read_result then
+                return false, read_error
+            end
+
+            local load_success, load_error = pcall(function()
+                library:load_style(read_result)
+            end)
+            if not load_success then
+                return false, "style decode failed: " .. tostring(load_error)
+            end
+
             library:update_style_list()
 
-            return true
+            return true, sanitize_result
         end
 
         function library:delete_style(name)
-            if not name or name == "" then
-                return false, "missing style name"
+            local path, sanitize_result = library:get_style_path(name)
+            if not path then
+                return false, sanitize_result
             end
 
-            local path = library.directory .. "/styling/" .. name .. ".cfg"
             if not isfile(path) then
                 return false, "style file missing"
             end
 
-            delfile(path)
+            local delete_success, delete_error = library:delete_json_file(path)
+            if not delete_success then
+                return false, delete_error
+            end
+
             library:update_style_list()
 
-            return true
+            return true, sanitize_result
         end
 
         function library:set_autoload(path, name)
@@ -781,6 +965,73 @@
             return http_service:JSONEncode(Config)
         end
 
+        function library:save_config(name)
+            local path, sanitize_result = library:get_config_path(name)
+            if not path then
+                return false, sanitize_result
+            end
+
+            local payload_success, payload_result = pcall(function()
+                return library:get_config()
+            end)
+            if not payload_success then
+                return false, "config encode failed: " .. tostring(payload_result)
+            end
+
+            local write_success, write_result = library:write_json_file(path, payload_result)
+            if not write_success then
+                return false, write_result
+            end
+
+            library:update_config_list()
+            return true, sanitize_result
+        end
+
+        function library:load_config_from_name(name)
+            local path, sanitize_result = library:get_config_path(name)
+            if not path then
+                return false, sanitize_result
+            end
+
+            if not isfile(path) then
+                return false, "config file missing"
+            end
+
+            local read_result, read_error = library:read_json_file(path)
+            if not read_result then
+                return false, read_error
+            end
+
+            local load_success, load_error = pcall(function()
+                library:load_config(read_result)
+            end)
+            if not load_success then
+                return false, "config decode failed: " .. tostring(load_error)
+            end
+
+            library:update_config_list()
+            return true, sanitize_result
+        end
+
+        function library:delete_config(name)
+            local path, sanitize_result = library:get_config_path(name)
+            if not path then
+                return false, sanitize_result
+            end
+
+            if not isfile(path) then
+                return false, "config file missing"
+            end
+
+            local delete_success, delete_error = library:delete_json_file(path)
+            if not delete_success then
+                return false, delete_error
+            end
+
+            library:update_config_list()
+            return true, sanitize_result
+        end
+
         function library:load_config(config_json) 
             local config = http_service:JSONDecode(config_json)
             
@@ -804,10 +1055,20 @@
         end 
         
         function library:round(number, float) 
+            if typeof(number) ~= "number" then
+                warn("rounding got non-number:", number, typeof(number))
+                return 0
+            end
+
+            if float ~= nil and typeof(float) ~= "number" then
+                warn("rounding got invalid float:", float, typeof(float))
+                float = 1
+            end
+
             local multiplier = 1 / (float or 1)
 
-            return floor(number * multiplier + 0.5) / multiplier
-        end 
+            return math.floor(number * multiplier + 0.5) / multiplier
+        end
 
         function library:apply_theme(instance, theme, property) 
             insert(themes.utility[theme][property], instance)
@@ -857,6 +1118,15 @@
         end
 
         function library:unload_menu() 
+            library.unloading = true
+
+            for index, connection in library.connections do
+                pcall(function()
+                    connection:Disconnect()
+                end)
+                library.connections[index] = nil
+            end
+
             if library[ "items" ] then 
                 library[ "items" ]:Destroy()
             end
@@ -864,12 +1134,14 @@
             if library[ "other" ] then 
                 library[ "other" ]:Destroy()
             end 
-            
-            for index, connection in library.connections do 
-                connection:Disconnect() 
-                connection = nil 
+
+            for _, theme_data in pairs(themes.utility) do
+                for property_name in pairs(theme_data) do
+                    theme_data[property_name] = {}
+                end
             end
-            
+
+            library.current_open = nil
             library = nil 
         end 
     --
@@ -915,6 +1187,11 @@
                     BorderSizePixel = 0;
                     BackgroundColor3 = themes.preset.window
                 }); library:apply_theme(items[ "main" ], "window", "BackgroundColor3"); items[ "main" ].Position = dim2(0, items[ "main" ].AbsolutePosition.X, 0, items[ "main" ].AbsolutePosition.Y)
+                items["main"].BackgroundTransparency = library.style_state.window_transparency
+                library.menu_scale_instance = library:create("UIScale", {
+                    Parent = items["main"];
+                    Scale = library.style_state.menu_scale;
+                })
                 library:fit_to_viewport(items[ "main" ])
                 
                 library:create( "UICorner" , {
@@ -1029,6 +1306,7 @@
                     BorderSizePixel = 0;
                     SliceCenter = rect(vec2(112, 112), vec2(147, 147))
                 });
+                items["shadow"].ImageTransparency = library.style_state.shadow_transparency
                 
                 items[ "global_fade" ] = library:create( "Frame" , {
                     Parent = items[ "main" ];
@@ -1041,6 +1319,7 @@
                     BackgroundColor3 = themes.preset.window;
                     ZIndex = 2;
                 }); library:apply_theme(items[ "global_fade" ], "window", "BackgroundColor3");                
+                items["global_fade"].BackgroundTransparency = library.style_state.window_transparency
 
                 library:create( "UICorner" , {
                     Parent = items[ "shadow" ];
@@ -1237,17 +1516,19 @@
                         BorderColor3 = rgb(0, 0, 0);
                         Size = dim2(1, 0, 1, 0);
                         ScrollingDirection = Enum.ScrollingDirection.X;
-                        AutomaticCanvasSize = Enum.AutomaticSize.X;
+                        ScrollingEnabled = true;
+                        AutomaticCanvasSize = Enum.AutomaticSize.None;
                         CanvasSize = dim2(0, 0, 0, 0);
                         ScrollBarThickness = library:is_mobile() and 0 or 2;
                         ScrollBarImageTransparency = library:is_mobile() and 1 or 0;
                         ScrollBarImageColor3 = rgb(44, 44, 46);
+                        ElasticBehavior = Enum.ElasticBehavior.Always;
                         ClipsDescendants = true;
                         BorderSizePixel = 0;
                         BackgroundColor3 = rgb(255, 255, 255)
                     });
                     
-                    library:create( "UIListLayout" , {
+                    local multi_section_layout = library:create( "UIListLayout" , {
                         Parent = items[ "multi_section_button_holder" ];
                         Padding = dim(0, 7);
                         SortOrder = Enum.SortOrder.LayoutOrder;
@@ -1260,7 +1541,15 @@
                         Parent = items[ "multi_section_button_holder" ];
                         PaddingRight = dim(0, 7);
                         PaddingLeft = dim(0, 7)
-                    });                        
+                    });
+
+                    local function update_multi_section_canvas()
+                        local content_width = multi_section_layout.AbsoluteContentSize.X + 14
+                        items[ "multi_section_button_holder" ].CanvasSize = dim2(0, max(items[ "multi_section_button_holder" ].AbsoluteSize.X, content_width), 0, 0)
+                    end
+
+                    library:connection(multi_section_layout:GetPropertyChangedSignal("AbsoluteContentSize"), update_multi_section_canvas)
+                    library:connection(items[ "multi_section_button_holder" ]:GetPropertyChangedSignal("AbsoluteSize"), update_multi_section_canvas)
 
                     for _, section in cfg.tabs do
                         local data = {items = {}} 
@@ -1409,13 +1698,14 @@
                             library:close_element()
 						end
 
-						multi_items[ "button" ].MouseButton1Down:Connect(function()
+						library:connection(multi_items[ "button" ].MouseButton1Down, function()
 							data.open_page() 
 						end)
 
 						cfg.pages[#cfg.pages + 1] = setmetatable(data, library)
                     end 
 
+                    update_multi_section_canvas()
                     cfg.pages[1].open_page()
                 --
             end 
@@ -1450,6 +1740,7 @@
                 items[ "tab_holder" ].Parent = self.items[ "main" ]
                 items[ "multi_section_button_holder" ].Visible = true 
                 items[ "multi_section_button_holder" ].Parent = self.items[ "multi_holder" ]
+                items[ "multi_section_button_holder" ].CanvasPosition = vec2(0, 0)
 
                 self.selected_tab = {
                     items[ "button" ];
@@ -1462,7 +1753,7 @@
                 library:close_element()
             end
 
-            items[ "button" ].MouseButton1Down:Connect(function()
+            library:connection(items[ "button" ].MouseButton1Down, function()
                 cfg.open_tab()
             end)
             
@@ -1600,6 +1891,7 @@
                     BorderSizePixel = 0;
                     BackgroundColor3 = themes.preset.section
                 }); library:apply_theme(items[ "inline" ], "section", "BackgroundColor3");
+                items["inline"].BackgroundTransparency = library.style_state.section_transparency
                 
                 library:create( "UICorner" , {
                     Parent = items[ "inline" ];
@@ -1794,7 +2086,7 @@
             end;
 
             if cfg.fading_toggle then
-                items[ "button" ].MouseButton1Click:Connect(function()
+                library:connection(items[ "button" ].MouseButton1Click, function()
                     cfg.default = not cfg.default 
                     cfg.toggle_section(cfg.default) 
                 end)
@@ -2047,12 +2339,12 @@
                 cfg.callback(bool)
             end 
             
-            items[ "toggle" ].MouseButton1Click:Connect(function()
+            library:connection(items[ "toggle" ].MouseButton1Click, function()
                 cfg.enabled = not cfg.enabled 
                 cfg.set(cfg.enabled)
             end)
 
-            items[ "toggle_button" ].MouseButton1Click:Connect(function()
+            library:connection(items[ "toggle_button" ].MouseButton1Click, function()
                 cfg.enabled = not cfg.enabled 
                 cfg.set(cfg.enabled)
             end)
@@ -2264,14 +2556,14 @@
                 cfg.callback(flags[cfg.flag])
             end
 
-            items[ "slider" ].InputBegan:Connect(function(input)
+            library:connection(items[ "slider" ].InputBegan, function(input)
                 if library:is_primary_input(input) then
                     cfg.dragging = true
                     library:tween(items[ "value" ], {TextColor3 = rgb(255, 255, 255)}, Enum.EasingStyle.Quad, 0.2)
                 end
             end)
 
-            items[ "slider" ].MouseButton1Down:Connect(function()
+            library:connection(items[ "slider" ].MouseButton1Down, function()
                 cfg.dragging = true 
                 library:tween(items[ "value" ], {TextColor3 = rgb(255, 255, 255)}, Enum.EasingStyle.Quad, 0.2)
             end)
@@ -3288,50 +3580,36 @@
                 cfg.set()
             end
 
-            items[ "colorpicker" ].MouseButton1Click:Connect(function()
+            library:connection(items[ "colorpicker" ].MouseButton1Click, function()
                 cfg.open = not cfg.open 
 
                 cfg.set_visible(cfg.open)            
             end)
 
-            uis.InputChanged:Connect(function(input)
-                if (dragging_sat or dragging_hue or dragging_alpha) and library:is_pointer_movement(input) then
-                    cfg.update_color() 
-                end
-            end)
-
-            library:connection(uis.InputEnded, function(input)
-                if library:is_primary_input(input) then
-                    dragging_sat = false
-                    dragging_hue = false
-                    dragging_alpha = false
-                end
-            end)    
-
-            items[ "alpha_gradient" ].InputBegan:Connect(function(input)
+            library:connection(items[ "alpha_gradient" ].InputBegan, function(input)
                 if library:is_primary_input(input) then
                     dragging_alpha = true 
                 end
             end)
-            items[ "alpha_gradient" ].MouseButton1Down:Connect(function()
+            library:connection(items[ "alpha_gradient" ].MouseButton1Down, function()
                 dragging_alpha = true 
             end)
             
-            items[ "hue_gradient" ].InputBegan:Connect(function(input)
+            library:connection(items[ "hue_gradient" ].InputBegan, function(input)
                 if library:is_primary_input(input) then
                     dragging_hue = true 
                 end
             end)
-            items[ "hue_gradient" ].MouseButton1Down:Connect(function()
+            library:connection(items[ "hue_gradient" ].MouseButton1Down, function()
                 dragging_hue = true 
             end)
             
-            items[ "sat" ].InputBegan:Connect(function(input)
+            library:connection(items[ "sat" ].InputBegan, function(input)
                 if library:is_primary_input(input) then
                     dragging_sat = true  
                 end
             end)
-            items[ "sat" ].MouseButton1Down:Connect(function()
+            library:connection(items[ "sat" ].MouseButton1Down, function()
                 dragging_sat = true  
             end)
 
@@ -3349,7 +3627,7 @@
                 end
             end)
 
-            items[ "input" ].FocusLost:Connect(function()
+            library:connection(items[ "input" ].FocusLost, function()
                 local text = items[ "input" ].Text
                 local r, g, b, a = library:convert(text)
                 
@@ -3358,11 +3636,11 @@
                 end 
             end)
 
-            items[ "input" ].Focused:Connect(function()
+            library:connection(items[ "input" ].Focused, function()
                 library:tween(items[ "input" ], {TextColor3 = rgb(245, 245, 245)})
             end)
 
-            items[ "input" ].FocusLost:Connect(function()
+            library:connection(items[ "input" ].FocusLost, function()
                 library:tween(items[ "input" ], {TextColor3 = rgb(72, 72, 72)})
             end)
             
@@ -3481,15 +3759,15 @@
                 cfg.callback(text)
             end 
             
-            items[ "input" ]:GetPropertyChangedSignal("Text"):Connect(function()
+            library:connection(items[ "input" ]:GetPropertyChangedSignal("Text"), function()
                 cfg.set(items[ "input" ].Text) 
             end)
 
-            items[ "input" ].Focused:Connect(function()
+            library:connection(items[ "input" ].Focused, function()
                 library:tween(items[ "input" ], {TextColor3 = rgb(245, 245, 245)})
             end)
 
-            items[ "input" ].FocusLost:Connect(function()
+            library:connection(items[ "input" ].FocusLost, function()
                 library:tween(items[ "input" ], {TextColor3 = rgb(72, 72, 72)})
             end)
                 
@@ -3700,7 +3978,7 @@
                             PaddingLeft = dim(0, 5)
                         });
 
-                        name.MouseButton1Click:Connect(function()
+                        library:connection(name.MouseButton1Click, function()
                             cfg.set(option)
 
                             cfg.set_visible(false)
@@ -3785,7 +4063,7 @@
                 items[ "dropdown" ].Position = dim_offset(items[ "keybind_holder" ].AbsolutePosition.X, items[ "keybind_holder" ].AbsolutePosition.Y + items[ "keybind_holder" ].AbsoluteSize.Y + 60)
             end
         
-            items[ "keybind_holder" ].MouseButton1Down:Connect(function()
+            library:connection(items[ "keybind_holder" ].MouseButton1Down, function()
                 task.wait()
                 items[ "key" ].Text = "..."	
 
@@ -3797,7 +4075,7 @@
                 end)
             end)
 
-            items[ "keybind_holder" ].MouseButton2Down:Connect(function()
+            library:connection(items[ "keybind_holder" ].MouseButton2Down, function()
                 cfg.open = not cfg.open 
 
                 cfg.set_visible(cfg.open)
@@ -3894,7 +4172,7 @@
                 }); library:apply_theme(items[ "name" ], "accent", "BackgroundColor3");                            
             end 
 
-            items[ "button" ].MouseButton1Click:Connect(function()
+            library:connection(items[ "button" ].MouseButton1Click, function()
                 cfg.callback()
 
                 items[ "name" ].TextColor3 = themes.preset.accent 
@@ -3990,7 +4268,7 @@
                 library:close_element(cfg)
             end
             
-            items[ "tick" ].MouseButton1Click:Connect(function()
+            library:connection(items[ "tick" ].MouseButton1Click, function()
                 cfg.open = not cfg.open
 
                 cfg.set_visible(cfg.open)
@@ -4003,9 +4281,10 @@
             local cfg = {
                 items = {};
                 options = properties.options or {"1", "2", "3"};
-                flag = properties.flag or library:next_flag();    
+                flag = properties.flag or library:next_flag();
                 callback = properties.callback or function() end;
-                data_store = {};        
+                searchable = properties.searchable ~= false;
+                data_store = {};
                 current_element;
             }
 
@@ -4021,8 +4300,25 @@
                     BackgroundColor3 = rgb(255, 255, 255)
                 });
                 
+                items[ "options" ] = library:create( "Frame" , {
+                    Parent = items[ "list" ];
+                    BackgroundTransparency = 1;
+                    Name = "\0";
+                    Size = dim2(1, 0, 0, 0);
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    AutomaticSize = Enum.AutomaticSize.Y;
+                    BackgroundColor3 = rgb(255, 255, 255)
+                });
+
                 library:create( "UIListLayout" , {
                     Parent = items[ "list" ];
+                    Padding = dim(0, 10);
+                    SortOrder = Enum.SortOrder.LayoutOrder
+                });
+
+                library:create( "UIListLayout" , {
+                    Parent = items[ "options" ];
                     Padding = dim(0, 10);
                     SortOrder = Enum.SortOrder.LayoutOrder
                 });
@@ -4032,12 +4328,55 @@
                     PaddingRight = dim(0, 4);
                     PaddingLeft = dim(0, 4)
                 });
+
+                items[ "search" ] = library:create( "TextBox" , {
+                    FontFace = fonts.small;
+                    TextColor3 = rgb(245, 245, 245);
+                    PlaceholderColor3 = rgb(140, 140, 140);
+                    PlaceholderText = "Search...";
+                    BorderColor3 = rgb(0, 0, 0);
+                    Text = "";
+                    Parent = items[ "list" ];
+                    Name = "\0";
+                    Size = dim2(1, 0, 0, 30);
+                    BorderSizePixel = 0;
+                    TextXAlignment = Enum.TextXAlignment.Left;
+                    TextSize = 14;
+                    ClearTextOnFocus = false;
+                    BackgroundColor3 = rgb(33, 33, 35);
+                    Visible = cfg.searchable
+                });
+
+                library:create( "UICorner" , {
+                    Parent = items[ "search" ];
+                    CornerRadius = dim(0, 3)
+                });
+
+                library:create( "UIPadding" , {
+                    Parent = items[ "search" ];
+                    PaddingRight = dim(0, 10);
+                    PaddingLeft = dim(0, 10)
+                });
             end 
 
+            local function apply_search_filter(query)
+                local normalized_query = string.lower(tostring(query or ""))
+
+                for _, button in cfg.data_store do
+                    local button_name = button:FindFirstChild("name_label")
+                    local button_text = string.lower(tostring(button_name and button_name.Text or ""))
+                    local is_visible = normalized_query == "" or string.find(button_text, normalized_query, 1, true) ~= nil
+                    button.Visible = is_visible
+                end
+            end
+
             function cfg.refresh_options(options_to_refresh) -- ignore goofy parameter
-                for _,option in cfg.data_store do 
+                for _, option in cfg.data_store do
                     option:Destroy()
                 end
+
+                cfg.data_store = {}
+                cfg.current_element = nil
 
                 for _, option_data in options_to_refresh do -- haha u skids no next >_<
                     local button = library:create( "TextButton" , {
@@ -4047,7 +4386,7 @@
                         Text = "";
                         AutoButtonColor = false;
                         AnchorPoint = vec2(1, 0);
-                        Parent = items[ "list" ];
+                        Parent = items[ "options" ];
                         Name = "\0";
                         Position = dim2(1, 0, 0, 0);
                         Size = dim2(1, 0, 0, 30);
@@ -4062,7 +4401,7 @@
                         BorderColor3 = rgb(0, 0, 0);
                         Text = option_data;
                         Parent = button;
-                        Name = "\0";
+                        Name = "name_label";
                         BackgroundTransparency = 1;
                         Size = dim2(1, 0, 1, 0);
                         BorderSizePixel = 0;
@@ -4076,9 +4415,9 @@
                         CornerRadius = dim(0, 3)
                     });     
 
-                    button.MouseButton1Click:Connect(function()
-                        local current = cfg.current_element 
-                        if current and current ~= name then 
+                    library:connection(button.MouseButton1Click, function()
+                        local current = cfg.current_element
+                        if current and current ~= name then
                             library:tween(current, {TextColor3 = rgb(72, 72, 72)})
                         end
 
@@ -4088,22 +4427,30 @@
                         cfg.current_element = name
                     end)
 
-                    name.MouseEnter:Connect(function()
-                        if cfg.current_element == name then 
-                            return 
-                        end 
+                    library:connection(name.MouseEnter, function()
+                        if cfg.current_element == name then
+                            return
+                        end
 
                         library:tween(name, {TextColor3 = rgb(140, 140, 140)})
                     end)
 
-                    name.MouseLeave:Connect(function()
-                        if cfg.current_element == name then 
-                            return 
-                        end 
+                    library:connection(name.MouseLeave, function()
+                        if cfg.current_element == name then
+                            return
+                        end
 
                         library:tween(name, {TextColor3 = rgb(72, 72, 72)})
                     end)
                 end
+
+                apply_search_filter(items["search"].Text)
+            end
+
+            if cfg.searchable then
+                library:connection(items["search"]:GetPropertyChangedSignal("Text"), function()
+                    apply_search_filter(items["search"].Text)
+                end)
             end
 
             cfg.refresh_options(cfg.options)
@@ -4111,105 +4458,116 @@
             return setmetatable(cfg, library)
         end 
 
-        function library:init_config(window) 
+        function library:init_config(window)
             window:seperator({name = "Settings"})
             local main, styling_tab, additional_tab = window:tab({name = "Configurations", tabs = {"Main", "Styling", "Additional"}})
 
+            local config_autoload_path = library:get_config_autoload_path()
+
+            local function notify_error(text)
+                notifications:create_notification({name = "sportsclub", info = text, lifetime = 4})
+            end
+
+            local function notify_success(text)
+                notifications:create_notification({name = "sportsclub", info = text, lifetime = 3})
+            end
+
             local function get_selected_name(text_flag, list_flag)
-                local typed = flags[text_flag]
-                if typed and typed ~= "" then
+                local typed = library:sanitize_storage_name(flags[text_flag])
+                if typed ~= "" then
                     return typed
                 end
 
-                local selected = flags[list_flag]
-                if type(selected) == "string" and selected ~= "" then
+                local selected = library:sanitize_storage_name(flags[list_flag])
+                if selected ~= "" then
                     return selected
                 end
 
                 return nil
             end
 
-            local function notify_error(text)
-                notifications:create_notification({name = "sportsclub", info = text, lifetime = 3})
+            local function format_error(prefix_text, error_text)
+                local cleaned_error = tostring(error_text or "unknown error"):gsub("[%c]+", " ")
+                if #cleaned_error > 96 then
+                    cleaned_error = cleaned_error:sub(1, 96) .. "..."
+                end
+                return prefix_text .. ": " .. cleaned_error
             end
 
-            local column = main:column({})
-            local section = column:section({name = "Configurations", size = 1, default = true, icon = "rbxassetid://139628202576511"})
-            config_holder = section:list({options = {}, callback = function(option) end, flag = "config_name_list"}); library:update_config_list()
+            local function safe_clipboard(text, success_text)
+                if not setclipboard then
+                    return notify_error("Clipboard is not supported")
+                end
 
-            local column = main:column({})
-            local section = column:section({name = "Settings", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
-            section:textbox({name = "Config name:", flag = "config_name_text"})
-            local autoload_label = section:label({name = "autoload: none"})
-            section:button({name = "Save", callback = function()
+                local ok, err = pcall(function()
+                    setclipboard(tostring(text))
+                end)
+
+                if ok then
+                    notify_success(success_text)
+                else
+                    notify_error(format_error("Clipboard failed", err))
+                end
+            end
+
+            local config_column = main:column({})
+            local config_list_section = config_column:section({name = "Configurations", size = 1, default = true, icon = "rbxassetid://139628202576511"})
+            config_holder = config_list_section:list({options = {}, callback = function(option) end, flag = "config_name_list", searchable = true})
+            library:update_config_list()
+
+            local config_manage_column = main:column({})
+            local config_manage_section = config_manage_column:section({name = "Settings", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
+            config_manage_section:textbox({name = "Config name:", flag = "config_name_text"})
+            local config_folder_label = config_manage_section:label({name = "folder: " .. library:get_place_config_directory()})
+            local config_place_label = config_manage_section:label({name = "place id: " .. tostring(game.PlaceId)})
+            local autoload_label = config_manage_section:label({name = "autoload: none"})
+
+            config_manage_section:button({name = "Save", callback = function()
                 local name = get_selected_name("config_name_text", "config_name_list")
                 if not name then
                     return notify_error("Enter or select a config first")
                 end
 
-                local ok, err = pcall(function()
-                    writefile(library.directory .. "/configs/" .. name .. ".cfg", library:get_config())
-                    library:update_config_list()
-                end)
-
+                local ok, result = library:save_config(name)
                 if ok then
-                    notifications:create_notification({name = "sportsclub", info = "Saved config: " .. name, lifetime = 3})
+                    notify_success("Saved config: " .. tostring(result))
                 else
-                    notify_error("Failed to save config")
-                    warn("config_save_error:\n" .. tostring(err))
+                    notify_error(format_error("Config save failed", result))
                 end
             end})
-            section:button({name = "Load", callback = function()
+
+            config_manage_section:button({name = "Load", callback = function()
                 local name = get_selected_name("config_name_text", "config_name_list")
                 if not name then
                     return notify_error("Select a config first")
                 end
 
-                local path = library.directory .. "/configs/" .. name .. ".cfg"
-                if not isfile(path) then
-                    return notify_error("Config not found")
-                end
-
-                local ok, err = pcall(function()
-                    library:load_config(readfile(path))
-                    library:update_config_list()
-                end)
-
+                local ok, result = library:load_config_from_name(name)
                 if ok then
-                    notifications:create_notification({name = "sportsclub", info = "Loaded config: " .. name, lifetime = 3})
+                    notify_success("Loaded config: " .. tostring(result))
                 else
-                    notify_error("Failed to load config")
-                    warn("config_load_error:\n" .. tostring(err))
+                    notify_error(format_error("Config load failed", result))
                 end
             end})
-            section:button({name = "Delete", callback = function()
+
+            config_manage_section:button({name = "Delete", callback = function()
                 local name = get_selected_name("config_name_text", "config_name_list")
                 if not name then
                     return notify_error("Select a config first")
                 end
 
-                local path = library.directory .. "/configs/" .. name .. ".cfg"
-                if not isfile(path) then
-                    return notify_error("Config not found")
-                end
-
-                local ok, err = pcall(function()
-                    delfile(path)
-                    library:update_config_list()
-                end)
-
+                local ok, result = library:delete_config(name)
                 if ok then
-                    notifications:create_notification({name = "sportsclub", info = "Deleted config: " .. name, lifetime = 3})
+                    notify_success("Deleted config: " .. tostring(result))
                 else
-                    notify_error("Failed to delete config")
-                    warn("config_delete_error:\n" .. tostring(err))
+                    notify_error(format_error("Config delete failed", result))
                 end
             end})
-            section:button({name = "Set as Autoload", callback = function()
-                local name = flags.config_name_list
-                if not name or name == "" then
-                    notifications:create_notification({name = "sportsclub", info = "Select a config first", lifetime = 3})
-                    return
+
+            config_manage_section:button({name = "Set as Autoload", callback = function()
+                local name = get_selected_name("config_name_text", "config_name_list")
+                if not name then
+                    return notify_error("Select a config first")
                 end
 
                 local ok, err = pcall(function()
@@ -4218,90 +4576,103 @@
                 end)
 
                 if ok then
-                    notifications:create_notification({name = "sportsclub", info = "Autoload set: " .. name, lifetime = 3})
+                    notify_success("Autoload set: " .. name)
                 else
-                    notifications:create_notification({name = "sportsclub", info = "Failed to set autoload", lifetime = 6})
-                    warn("config_autoload_set_error:\n" .. tostring(err))
+                    notify_error(format_error("Autoload set failed", err))
                 end
             end})
-            section:button({name = "Clear Autoload", callback = function()
+
+            config_manage_section:button({name = "Clear Autoload", callback = function()
                 local ok, err = pcall(function()
-                    if isfile(config_autoload_path) then
-                        library:clear_autoload(config_autoload_path)
-                        autoload_label.set("autoload: none")
-                        notifications:create_notification({name = "sportsclub", info = "Autoload cleared", lifetime = 3})
-                    else
-                        notifications:create_notification({name = "sportsclub", info = "No autoload set", lifetime = 3})
-                    end
+                    library:clear_autoload(config_autoload_path)
+                    autoload_label.set("autoload: none")
                 end)
 
-                if not ok then
-                    notifications:create_notification({name = "sportsclub", info = "Failed to clear autoload", lifetime = 6})
-                    warn("config_autoload_clear_error:\n" .. tostring(err))
+                if ok then
+                    notify_success("Autoload cleared")
+                else
+                    notify_error(format_error("Autoload clear failed", err))
                 end
+            end})
+
+            config_manage_section:button({name = "Copy Config Folder", callback = function()
+                safe_clipboard(library:get_place_config_directory(), "Copied config folder")
             end})
 
             local styling_column = styling_tab:column({})
             local styling_section = styling_column:section({name = "Styling", size = 1, default = true, icon = "rbxassetid://129380150574313"})
-            style_holder = styling_section:list({options = {"Default"}, callback = function(option) end, flag = "style_name_list"}); library:update_style_list()
+            style_holder = styling_section:list({options = {"Default"}, callback = function(option) end, flag = "style_name_list", searchable = true})
+            library:update_style_list()
 
             local styling_manage_column = styling_tab:column({})
             local styling_manage = styling_manage_column:section({name = "Styling Settings", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
             styling_manage:textbox({name = "Style name:", flag = "style_name_text"})
             local style_autoload_label = styling_manage:label({name = "autoload: none"})
             styling_manage:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.LeftControl, callback = function(bool) window.toggle_menu(bool) end, default = true})
-            styling_manage:colorpicker({name = "Menu Accent", flag = "style_accent_color", callback = function(color, alpha) library:update_theme("accent", color) end, color = themes.preset.accent})
-            styling_manage:colorpicker({name = "Window Color", flag = "menu_window_color", callback = function(color, alpha) library:update_theme("window", color) end, color = themes.preset.window})
-            styling_manage:colorpicker({name = "Section Color", flag = "menu_section_color", callback = function(color, alpha) library:update_theme("section", color) end, color = themes.preset.section})
-            styling_manage:colorpicker({name = "Text Color", flag = "menu_text_color", callback = function(color, alpha) library:update_theme("text", color) end, color = themes.preset.text})
-            styling_manage:colorpicker({name = "Muted Color", flag = "menu_muted_color", callback = function(color, alpha) library:update_theme("muted", color) end, color = themes.preset.muted})
+            styling_manage:colorpicker({name = "Menu Accent", flag = "style_accent_color", callback = function(color_value, alpha) library:update_theme("accent", color_value) end, color = themes.preset.accent})
+            styling_manage:colorpicker({name = "Window Color", flag = "menu_window_color", callback = function(color_value, alpha) library:update_theme("window", color_value) end, color = themes.preset.window})
+            styling_manage:colorpicker({name = "Section Color", flag = "menu_section_color", callback = function(color_value, alpha) library:update_theme("section", color_value) end, color = themes.preset.section})
+            styling_manage:colorpicker({name = "Text Color", flag = "menu_text_color", callback = function(color_value, alpha) library:update_theme("text", color_value) end, color = themes.preset.text})
+            styling_manage:colorpicker({name = "Muted Color", flag = "menu_muted_color", callback = function(color_value, alpha) library:update_theme("muted", color_value) end, color = themes.preset.muted})
+            styling_manage:slider({name = "Menu Scale", flag = "style_menu_scale", min = 0.7, max = 1.4, default = library.style_state.menu_scale, interval = 0.01, callback = function(value)
+                library:update_menu_scale(value)
+            end})
+            styling_manage:slider({name = "Window Transparency", flag = "style_window_transparency", min = 0, max = 1, default = library.style_state.window_transparency, interval = 0.01, callback = function(value)
+                library:update_theme_transparency("window", value)
+            end})
+            styling_manage:slider({name = "Section Transparency", flag = "style_section_transparency", min = 0, max = 1, default = library.style_state.section_transparency, interval = 0.01, callback = function(value)
+                library:update_theme_transparency("section", value)
+            end})
+            styling_manage:slider({name = "Shadow Transparency", flag = "style_shadow_transparency", min = 0, max = 1, default = library.style_state.shadow_transparency, interval = 0.01, callback = function(value)
+                library:update_shadow_transparency(value)
+            end})
+
             styling_manage:button({name = "Save Style", callback = function()
                 local name = get_selected_name("style_name_text", "style_name_list")
                 if not name then
                     return notify_error("Enter or select a style first")
                 end
 
-                local ok, err = library:save_style(name)
+                local ok, result = library:save_style(name)
                 if ok then
-                    notifications:create_notification({name = "sportsclub", info = "Saved style: " .. name, lifetime = 3})
+                    notify_success("Saved style: " .. tostring(result))
                 else
-                    notify_error("Failed to save style")
-                    warn("style_save_error:\n" .. tostring(err))
+                    notify_error(format_error("Style save failed", result))
                 end
             end})
+
             styling_manage:button({name = "Load Style", callback = function()
                 local name = get_selected_name("style_name_text", "style_name_list")
                 if not name then
                     return notify_error("Select a style first")
                 end
 
-                local ok, err = library:load_style_from_name(name)
+                local ok, result = library:load_style_from_name(name)
                 if ok then
-                    notifications:create_notification({name = "sportsclub", info = "Loaded style: " .. name, lifetime = 3})
+                    notify_success("Loaded style: " .. tostring(result))
                 else
-                    notify_error("Failed to load style")
-                    warn("style_load_error:\n" .. tostring(err))
+                    notify_error(format_error("Style load failed", result))
                 end
             end})
+
             styling_manage:button({name = "Delete Style", callback = function()
                 local name = get_selected_name("style_name_text", "style_name_list")
                 if not name then
                     return notify_error("Select a style first")
                 end
 
-                local ok, err = library:delete_style(name)
+                local ok, result = library:delete_style(name)
                 if ok then
-                    notifications:create_notification({name = "sportsclub", info = "Deleted style: " .. name, lifetime = 3})
+                    notify_success("Deleted style: " .. tostring(result))
                 else
-                    notify_error("Failed to delete style")
-                    warn("style_delete_error:\n" .. tostring(err))
+                    notify_error(format_error("Style delete failed", result))
                 end
             end})
+
             styling_manage:button({name = "Set Style Autoload", callback = function()
-                local name = flags.style_name_list
-                if not name or name == "" then
-                    notifications:create_notification({name = "sportsclub", info = "Select a style first", lifetime = 3})
-                    return
+                local name = get_selected_name("style_name_text", "style_name_list")
+                if not name then
+                    return notify_error("Select a style first")
                 end
 
                 local ok, err = pcall(function()
@@ -4310,35 +4681,38 @@
                 end)
 
                 if ok then
-                    notifications:create_notification({name = "sportsclub", info = "Style autoload set: " .. name, lifetime = 3})
+                    notify_success("Style autoload set: " .. name)
                 else
-                    notifications:create_notification({name = "sportsclub", info = "Failed to set style autoload", lifetime = 6})
-                    warn("style_autoload_set_error:\n" .. tostring(err))
+                    notify_error(format_error("Style autoload failed", err))
                 end
             end})
+
             styling_manage:button({name = "Clear Style Autoload", callback = function()
                 local ok, err = pcall(function()
-                    if isfile(style_autoload_path) then
-                        library:clear_autoload(style_autoload_path)
-                        style_autoload_label.set("autoload: none")
-                        notifications:create_notification({name = "sportsclub", info = "Style autoload cleared", lifetime = 3})
-                    else
-                        notifications:create_notification({name = "sportsclub", info = "No style autoload set", lifetime = 3})
-                    end
+                    library:clear_autoload(style_autoload_path)
+                    style_autoload_label.set("autoload: none")
                 end)
 
-                if not ok then
-                    notifications:create_notification({name = "sportsclub", info = "Failed to clear style autoload", lifetime = 6})
-                    warn("style_autoload_clear_error:\n" .. tostring(err))
+                if ok then
+                    notify_success("Style autoload cleared")
+                else
+                    notify_error(format_error("Style autoload clear failed", err))
                 end
             end})
-            styling_manage:button({name = "Reset Colors", callback = function()
+
+            styling_manage:button({name = "Reset Style", callback = function()
                 library:update_theme("accent", rgb(17, 0, 255))
                 library:update_theme("window", rgb(14, 14, 16))
                 library:update_theme("section", rgb(22, 22, 24))
                 library:update_theme("text", rgb(245, 245, 245))
                 library:update_theme("muted", rgb(72, 72, 73))
+                library:update_menu_scale(1)
+                library:update_theme_transparency("window", 0)
+                library:update_theme_transparency("section", 0)
+                library:update_shadow_transparency(1)
+                notify_success("Reset style")
             end})
+
             styling_manage:button({name = "Unload Menu", callback = function()
                 library:unload_menu()
             end})
@@ -4346,15 +4720,26 @@
             local additional_column = additional_tab:column({})
             local section_server = additional_column:section({name = "Additional", size = 1, default = true, icon = "rbxassetid://129380150574313"})
 
+            local executor_name = "unknown"
+            pcall(function()
+                executor_name = identifyexecutor and identifyexecutor() or "unknown"
+            end)
+
+            section_server:label({name = "executor: " .. tostring(executor_name)})
+            section_server:label({name = "place id: " .. tostring(game.PlaceId)})
+            section_server:label({name = "game id: " .. tostring(game.GameId)})
+            section_server:label({name = "config folder: " .. library:get_place_config_directory()})
+
             local server_info_label = section_server:label({name = "players: -"})
             local uptime_label = section_server:label({name = "uptime: -"})
             local clock = os.clock
-            local floor = math.floor
+            local runtime_floor = math.floor
             local format = string.format
             local players_service = players
             local max_players = game.Players.MaxPlayers
             local start_time = clock()
             local stat_accumulator = 0
+
             library:connection(run.Heartbeat, function(delta_time)
                 stat_accumulator += delta_time
                 if stat_accumulator < 1 then
@@ -4363,8 +4748,8 @@
 
                 stat_accumulator = 0
                 local player_count = #players_service:GetPlayers()
-                local uptime_secs = floor(clock() - start_time)
-                local mins = floor(uptime_secs / 60)
+                local uptime_secs = runtime_floor(clock() - start_time)
+                local mins = runtime_floor(uptime_secs / 60)
                 local secs = uptime_secs % 60
 
                 server_info_label.set("players: " .. player_count .. "/" .. max_players)
@@ -4372,55 +4757,58 @@
             end)
 
             local server_btns = {
-                {"copy jobid", function() setclipboard(game.JobId) notifications:create_notification({name = "sportsclub", info = "Copied job id", lifetime = 2}) end},
-                {"copy gameid", function() setclipboard(tostring(game.GameId)) notifications:create_notification({name = "sportsclub", info = "Copied game id", lifetime = 2}) end},
+                {"copy jobid", function() safe_clipboard(game.JobId, "Copied job id") end},
+                {"copy placeid", function() safe_clipboard(tostring(game.PlaceId), "Copied place id") end},
+                {"copy gameid", function() safe_clipboard(tostring(game.GameId), "Copied game id") end},
+                {"copy executor", function() safe_clipboard(tostring(executor_name), "Copied executor") end},
                 {"copy join script", function()
-                    setclipboard(('game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)'):format(game.PlaceId, game.JobId))
-                    notifications:create_notification({name = "sportsclub", info = "Copied join script", lifetime = 2})
+                    safe_clipboard(('game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)'):format(game.PlaceId, game.JobId), "Copied join script")
                 end},
                 {"rejoin", function()
-                    notifications:create_notification({name = "sportsclub", info = "Rejoining...", lifetime = 2})
+                    notify_success("Rejoining...")
                     task.wait(0.1)
                     game.Players.LocalPlayer:Kick()
                     game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
                 end},
             }
 
-            for _, b in ipairs(server_btns) do
-                section_server:button({name = b[1], callback = b[2]})
+            for _, button_data in ipairs(server_btns) do
+                section_server:button({name = button_data[1], callback = button_data[2]})
             end
 
             section_server:button({name = "join new server", callback = function()
-                local ts = game:GetService("TeleportService")
-                local ok, res = pcall(function()
+                local teleport_service = game:GetService("TeleportService")
+                local ok, response = pcall(function()
                     return game:GetService("HttpService"):JSONDecode(game:HttpGetAsync("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
                 end)
 
-                if not ok or not res or not res.data then
-                    notifications:create_notification({name = "Notification", info = "Failed to fetch servers", lifetime = 3})
-                    return
+                if not ok or not response or not response.data then
+                    return notify_error("Failed to fetch servers")
                 end
 
                 local candidates = {}
-                for _, s in ipairs(res.data) do
-                    if s.id ~= game.JobId and s.playing >= flags.min_players and s.playing <= flags.max_players then
-                        candidates[#candidates + 1] = s
+                for _, server_data in ipairs(response.data) do
+                    if server_data.id ~= game.JobId and server_data.playing >= flags.min_players and server_data.playing <= flags.max_players then
+                        candidates[#candidates + 1] = server_data
                     end
                 end
 
-                if #candidates > 0 then
-                    notifications:create_notification({name = "Notification", info = "Joining new server...", lifetime = 2})
-                    task.wait(0.1)
-                    game.Players.LocalPlayer:Kick()
-                    ts:TeleportToPlaceInstance(game.PlaceId, candidates[random(1, #candidates)].id)
-                else
-                    notifications:create_notification({name = "Notification", info = "No matching servers found", lifetime = 3})
+                if #candidates <= 0 then
+                    return notify_error("No matching servers found")
                 end
+
+                notify_success("Joining new server...")
+                task.wait(0.1)
+                game.Players.LocalPlayer:Kick()
+                teleport_service:TeleportToPlaceInstance(game.PlaceId, candidates[random(1, #candidates)].id)
             end})
+
             section_server:slider({name = "min players", flag = "min_players", min = 0, max = 40, default = 0, interval = 1})
             section_server:slider({name = "max players", flag = "max_players", min = 0, max = 40, default = 15, interval = 1})
-            section_server:slider({name = "frames per second", flag = "frames_per_second", min = 30, max = 1000, default = 240, interval = 1, callback = function(v)
-                setfpscap(v)
+            section_server:slider({name = "frames per second", flag = "frames_per_second", min = 30, max = 1000, default = 240, interval = 1, callback = function(value)
+                if setfpscap then
+                    setfpscap(value)
+                end
             end})
 
             task.spawn(function()
@@ -4429,27 +4817,21 @@
 
                 local config_name = library:get_autoload(config_autoload_path)
                 if config_name then
-                    local config_path = library.directory .. "/configs/" .. config_name .. ".cfg"
-                    if isfile(config_path) then
-                        local ok = pcall(function()
-                            library:load_config(readfile(config_path))
-                        end)
-                        if ok then
-                            notifications:create_notification({name = "Notification", info = "Auto loaded config: " .. config_name, lifetime = 3})
-                        end
+                    local ok, result = library:load_config_from_name(config_name)
+                    if ok then
+                        notify_success("Auto loaded config: " .. tostring(result))
+                    else
+                        notify_error(format_error("Config autoload failed", result))
                     end
                 end
 
                 local style_name = library:get_autoload(style_autoload_path)
                 if style_name then
-                    local style_path = library.directory .. "/styling/" .. style_name .. ".cfg"
-                    if isfile(style_path) then
-                        local ok = pcall(function()
-                            library:load_style(readfile(style_path))
-                        end)
-                        if ok then
-                            notifications:create_notification({name = "Notification", info = "Auto loaded style: " .. style_name, lifetime = 3})
-                        end
+                    local ok, result = library:load_style_from_name(style_name)
+                    if ok then
+                        notify_success("Auto loaded style: " .. tostring(result))
+                    else
+                        notify_error(format_error("Style autoload failed", result))
                     end
                 end
             end)
@@ -4466,6 +4848,9 @@
                     if style_name then
                         style_autoload_label.set("autoload: " .. style_name)
                     end
+
+                    config_folder_label.set("folder: " .. library:get_place_config_directory())
+                    config_place_label.set("place id: " .. tostring(game.PlaceId))
                 end)
             end)
         end
