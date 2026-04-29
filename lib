@@ -1002,9 +1002,14 @@
                 return false, read_error
             end
 
+            local menu_enabled = library["items"] and library["items"].Enabled
             local load_success, load_error = pcall(function()
                 library:load_config(read_result)
             end)
+            if library["items"] then
+                library["items"].Enabled = menu_enabled ~= false
+                library:update_mobile_menu_button()
+            end
             if not load_success then
                 return false, "config decode failed: " .. tostring(load_error)
             end
@@ -4377,6 +4382,7 @@
 
                 cfg.data_store = {}
                 cfg.current_element = nil
+                local selected_option = tostring(flags[cfg.flag] or "")
 
                 for _, option_data in options_to_refresh do -- haha u skids no next >_<
                     local button = library:create( "TextButton" , {
@@ -4442,6 +4448,11 @@
 
                         library:tween(name, {TextColor3 = rgb(72, 72, 72)})
                     end)
+
+                    if tostring(option_data) == selected_option then
+                        name.TextColor3 = rgb(245, 245, 245)
+                        cfg.current_element = name
+                    end
                 end
 
                 apply_search_filter(items["search"].Text)
@@ -4472,7 +4483,7 @@
                 notifications:create_notification({name = "sportsclub", info = text, lifetime = 3})
             end
 
-            local function get_selected_name(text_flag, list_flag)
+            local function get_text_priority_name(text_flag, list_flag)
                 local typed = library:sanitize_storage_name(flags[text_flag])
                 if typed ~= "" then
                     return typed
@@ -4481,6 +4492,20 @@
                 local selected = library:sanitize_storage_name(flags[list_flag])
                 if selected ~= "" then
                     return selected
+                end
+
+                return nil
+            end
+
+            local function get_list_priority_name(text_flag, list_flag)
+                local selected = library:sanitize_storage_name(flags[list_flag])
+                if selected ~= "" then
+                    return selected
+                end
+
+                local typed = library:sanitize_storage_name(flags[text_flag])
+                if typed ~= "" then
+                    return typed
                 end
 
                 return nil
@@ -4519,10 +4544,11 @@
             local config_manage_section = config_manage_column:section({name = "Settings", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
             config_manage_section:textbox({name = "Config name:", flag = "config_name_text"})
             local config_place_label = config_manage_section:label({name = "place id: " .. tostring(game.PlaceId)})
+            local config_folder_label = config_manage_section:label({name = "folder: " .. library:get_place_config_directory()})
             local autoload_label = config_manage_section:label({name = "autoload: none"})
 
             config_manage_section:button({name = "Save", callback = function()
-                local name = get_selected_name("config_name_text", "config_name_list")
+                local name = get_text_priority_name("config_name_text", "config_name_list")
                 if not name then
                     return notify_error("Enter or select a config first")
                 end
@@ -4536,7 +4562,7 @@
             end})
 
             config_manage_section:button({name = "Load", callback = function()
-                local name = get_selected_name("config_name_text", "config_name_list")
+                local name = get_list_priority_name("config_name_text", "config_name_list")
                 if not name then
                     return notify_error("Select a config first")
                 end
@@ -4550,7 +4576,7 @@
             end})
 
             config_manage_section:button({name = "Delete", callback = function()
-                local name = get_selected_name("config_name_text", "config_name_list")
+                local name = get_list_priority_name("config_name_text", "config_name_list")
                 if not name then
                     return notify_error("Select a config first")
                 end
@@ -4564,7 +4590,7 @@
             end})
 
             config_manage_section:button({name = "Set as Autoload", callback = function()
-                local name = get_selected_name("config_name_text", "config_name_list")
+                local name = get_list_priority_name("config_name_text", "config_name_list")
                 if not name then
                     return notify_error("Select a config first")
                 end
@@ -4627,7 +4653,7 @@
             end})
 
             styling_manage:button({name = "Save Style", callback = function()
-                local name = get_selected_name("style_name_text", "style_name_list")
+                local name = get_text_priority_name("style_name_text", "style_name_list")
                 if not name then
                     return notify_error("Enter or select a style first")
                 end
@@ -4641,7 +4667,7 @@
             end})
 
             styling_manage:button({name = "Load Style", callback = function()
-                local name = get_selected_name("style_name_text", "style_name_list")
+                local name = get_list_priority_name("style_name_text", "style_name_list")
                 if not name then
                     return notify_error("Select a style first")
                 end
@@ -4655,7 +4681,7 @@
             end})
 
             styling_manage:button({name = "Delete Style", callback = function()
-                local name = get_selected_name("style_name_text", "style_name_list")
+                local name = get_list_priority_name("style_name_text", "style_name_list")
                 if not name then
                     return notify_error("Select a style first")
                 end
@@ -4669,7 +4695,7 @@
             end})
 
             styling_manage:button({name = "Set Style Autoload", callback = function()
-                local name = get_selected_name("style_name_text", "style_name_list")
+                local name = get_list_priority_name("style_name_text", "style_name_list")
                 if not name then
                     return notify_error("Select a style first")
                 end
