@@ -4518,7 +4518,6 @@
             local config_manage_column = main:column({})
             local config_manage_section = config_manage_column:section({name = "Settings", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
             config_manage_section:textbox({name = "Config name:", flag = "config_name_text"})
-            local config_folder_label = config_manage_section:label({name = "folder: " .. library:get_place_config_directory()})
             local config_place_label = config_manage_section:label({name = "place id: " .. tostring(game.PlaceId)})
             local autoload_label = config_manage_section:label({name = "autoload: none"})
 
@@ -4760,7 +4759,6 @@
                 {"copy jobid", function() safe_clipboard(game.JobId, "Copied job id") end},
                 {"copy placeid", function() safe_clipboard(tostring(game.PlaceId), "Copied place id") end},
                 {"copy gameid", function() safe_clipboard(tostring(game.GameId), "Copied game id") end},
-                {"copy executor", function() safe_clipboard(tostring(executor_name), "Copied executor") end},
                 {"copy join script", function()
                     safe_clipboard(('game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)'):format(game.PlaceId, game.JobId), "Copied join script")
                 end},
