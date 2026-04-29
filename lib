@@ -639,7 +639,7 @@
 
         function library:get_place_config_directory()
             local config_root = library.directory .. "/configs"
-            local place_directory = config_root .. "/" .. tostring(game.PlaceId)
+            local place_directory = config_root .. "/" .. tostring(game.GameId)
 
             if not isfolder(config_root) then
                 makefolder(config_root)
