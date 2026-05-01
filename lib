@@ -3531,23 +3531,48 @@
                     return
                 end 
 
-                if color then 
+                if typeof(color) == "Color3" then 
                     h, s, v = color:ToHSV()
+                elseif type(color) == "table" then
+                    local r = tonumber(color.R or color.r or color[1])
+                    local g = tonumber(color.G or color.g or color[2])
+                    local b = tonumber(color.B or color.b or color[3])
+
+                    if r and g and b then
+                        if r > 1 or g > 1 or b > 1 then
+                            r = r / 255
+                            g = g / 255
+                            b = b / 255
+                        end
+
+                        h, s, v = Color3.new(r, g, b):ToHSV()
+                    end
                 end
                 
-                if alpha then 
-                    a = alpha
+                if type(alpha) == "number" then 
+                    a = math.clamp(alpha, 0, 1)
+                elseif type(alpha) == "table" then
+                    local t = tonumber(alpha.Transparency or alpha.transparency or alpha.alpha)
+                    if t then
+                        a = math.clamp(t, 0, 1)
+                    end
                 end 
+                
+                h = tonumber(h) or 0
+                s = tonumber(s) or 1
+                v = tonumber(v) or 1
+                a = tonumber(a) or 0
                 
                 local Color = hsv(h, s, v)
 
-                -- Ok so quick story, should I cache any of this? no...?? anyways I know this code is very bad but its your fault for buying a ui with animations (on a serious note im too lazy to make this look nice)
-                -- Also further note, yeah I kind of did this scale_factor * size-valuesize.plane because then I would have to do tomfoolery to make it clip properly.
                 library:tween(items[ "hue_picker" ], {Position = dim2(0, (items[ "hue_gradient" ].AbsoluteSize.X - items[ "hue_picker" ].AbsoluteSize.X) * h, 0.5, 0)}, Enum.EasingStyle.Linear, 0.05)
                 library:tween(items[ "alpha_picker" ], {Position = dim2(0, (items[ "alpha_gradient" ].AbsoluteSize.X - items[ "alpha_picker" ].AbsoluteSize.X) * (1 - a), 0.5, 0)}, Enum.EasingStyle.Linear, 0.05)
-                library:tween(items[ "satvalpicker" ], {Position = dim2(0, s * (items[ "saturation_holder" ].AbsoluteSize.X - items[ "satvalpicker" ].AbsoluteSize.X), 1, 1 - v * (items[ "saturation_holder" ].AbsoluteSize.Y - items[ "satvalpicker" ].AbsoluteSize.Y))}, Enum.EasingStyle.Linear, 0.05)
+                library:tween(items[ "satvalpicker" ], {Position = dim2(0, s * (items[ "saturation_holder" ].AbsoluteSize.X - items[ "satvalpicker" ].AbsoluteSize.X), 0, (1 - v) * (items[ "saturation_holder" ].AbsoluteSize.Y - items[ "satvalpicker" ].AbsoluteSize.Y))}, Enum.EasingStyle.Linear, 0.05)
 
-                items[ "alpha_indicator" ]:FindFirstChildOfClass("UIGradient").Color = rgbseq{rgbkey(0, rgb(112, 112, 112)), rgbkey(1, hsv(h, 1, 1))}; -- shit code
+                local gradient = items[ "alpha_indicator" ]:FindFirstChildOfClass("UIGradient")
+                if gradient then
+                    gradient.Color = rgbseq{rgbkey(0, rgb(112, 112, 112)), rgbkey(1, hsv(h, 1, 1))}
+                end
                 
                 items[ "colorpicker" ].BackgroundColor3 = Color
                 items[ "colorpicker_inline" ].BackgroundColor3 = Color
@@ -3562,11 +3587,17 @@
                     Transparency = a 
                 }
                 
-                local color = items[ "colorpicker" ].BackgroundColor3
-                items[ "input" ].Text = string.format("%s, %s, %s, ", library:round(color.R * 255), library:round(color.G * 255), library:round(color.B * 255))
-                items[ "input" ].Text ..= library:round(1 - a, 0.01)
+                local color_val = items[ "colorpicker" ].BackgroundColor3
+                items[ "input" ].Text = string.format("%s, %s, %s, %s",
+                    library:round(color_val.R * 255),
+                    library:round(color_val.G * 255),
+                    library:round(color_val.B * 255),
+                    library:round(1 - a, 0.01)
+                )
                 
-                cfg.callback(Color, a)
+                if cfg.callback then
+                    cfg.callback(Color, a)
+                end
             end
             
             function cfg.update_color() 
@@ -4543,8 +4574,7 @@
             local config_manage_column = main:column({})
             local config_manage_section = config_manage_column:section({name = "Settings", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
             config_manage_section:textbox({name = "Config name:", flag = "config_name_text"})
-            local config_place_label = config_manage_section:label({name = "place id: " .. tostring(game.PlaceId)})
-            local config_folder_label = config_manage_section:label({name = "folder: " .. library:get_place_config_directory()})
+            local config_place_label = config_manage_section:label({name = "game id: " .. tostring(game.GameId)})
             local autoload_label = config_manage_section:label({name = "autoload: none"})
 
             config_manage_section:button({name = "Save", callback = function()
