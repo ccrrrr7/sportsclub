@@ -380,6 +380,36 @@
             return str;
         end 
 
+        function library:normalize_flag_name(value)
+            local normalized_value = tostring(value or ""):lower()
+            normalized_value = normalized_value:gsub("[^%w]+", "_"):gsub("^_+", ""):gsub("_+$", "")
+            return normalized_value ~= "" and normalized_value or nil
+        end
+
+        function library:get_control_flag(scope_name, control_name, control_type, explicit_flag)
+            if explicit_flag then
+                return explicit_flag
+            end
+
+            local normalized_scope = library:normalize_flag_name(scope_name)
+            local normalized_control = library:normalize_flag_name(control_name)
+            local normalized_type = library:normalize_flag_name(control_type) or "control"
+
+            if normalized_scope and normalized_control then
+                return normalized_scope .. "_" .. normalized_control .. "_" .. normalized_type
+            end
+
+            if normalized_control then
+                return normalized_control .. "_" .. normalized_type
+            end
+
+            if normalized_scope then
+                return normalized_scope .. "_" .. normalized_type
+            end
+
+            return library:next_flag()
+        end
+
         function library:mouse_in_frame(uiobject)
             local y_cond = uiobject.AbsolutePosition.Y <= mouse.Y and mouse.Y <= uiobject.AbsolutePosition.Y + uiobject.AbsoluteSize.Y
             local x_cond = uiobject.AbsolutePosition.X <= mouse.X and mouse.X <= uiobject.AbsolutePosition.X + uiobject.AbsoluteSize.X
@@ -2112,7 +2142,7 @@
                 enabled = options.enabled or nil,
                 name = options.name or "Toggle",
                 info = options.info or nil,
-                flag = options.flag or library:next_flag(),
+                flag = library:get_control_flag(self.name, options.name or "toggle", "toggle", options.flag),
                 
                 type = options.type and string.lower(options.type) or "toggle",
 
@@ -2377,7 +2407,7 @@
             local cfg = {
                 name = options.name or nil,
                 suffix = options.suffix or "",
-                flag = options.flag or library:next_flag(),
+                flag = library:get_control_flag(self.name, options.name or "slider", "slider", options.flag),
                 callback = options.callback or function() end, 
                 info = options.info or nil; 
 
@@ -2610,7 +2640,7 @@
             local cfg = {
                 name = options.name or nil;
                 info = options.info or nil;
-                flag = options.flag or library:next_flag();
+                flag = library:get_control_flag(self.name, options.name or "dropdown", "dropdown", options.flag);
                 options = options.items or {""};
                 callback = options.callback or function() end;
                 multi = options.multi or false;
@@ -3163,7 +3193,7 @@
         function library:colorpicker(options) 
             local cfg = {
                 name = options.name or "Color", 
-                flag = options.flag or library:next_flag(),
+                flag = library:get_control_flag(self.name, options.name or "color", "colorpicker", options.flag),
 
                 color = options.color or color(1, 1, 1), -- Default to white color if not provided
                 alpha = options.alpha and 1 - options.alpha or 0,
@@ -3691,7 +3721,7 @@
                 name = options.name or "TextBox",
                 placeholder = options.placeholder or options.placeholdertext or options.holder or options.holdertext or "type here...",
                 default = options.default or "",
-                flag = options.flag or library:next_flag(),
+                flag = library:get_control_flag(self.name, options.name or "textbox", "textbox", options.flag),
                 callback = options.callback or function() end,
                 visible = options.visible or true,
                 items = {};
@@ -3818,7 +3848,7 @@
 
         function library:keybind(options) 
             local cfg = {
-                flag = options.flag or library:next_flag(),
+                flag = library:get_control_flag(self.name, options.name or "keybind", "keybind", options.flag),
                 callback = options.callback or function() end,
                 name = options.name or nil, 
                 ignore_key = options.ignore or false, 
@@ -4223,6 +4253,7 @@
                 open = false; 
                 items = {}; 
                 sanity = true; -- made this for my own sanity.
+                name = self.name;
             }
 
             local items = cfg.items; do 
