@@ -103,8 +103,6 @@ do
     Camera.UpdateSize()
 end
 
-local Viewport = CurrentCamera and CurrentCamera.ViewportSize or Vector2_new(1920, 1080)
-
 getgenv().Visuals = {
     Settings = {
         Font = "ProggyClean",
@@ -112,7 +110,7 @@ getgenv().Visuals = {
         RefreshRate = 60,
 
         Crosshair = {
-            Enabled = true,
+            Enabled = false,
 
             Dot = false,
             Color = {Color3_fromRGB(200, 150, 255), Color3_fromRGB(255, 250, 255)},
@@ -121,7 +119,7 @@ getgenv().Visuals = {
             AnimationSpeed = 1.2,
 
             Lines = {
-                Enabled = true,
+                Enabled = false,
                 Rotate = {true, 5},
                 Amount = 4,
                 Length = 10,
@@ -159,8 +157,7 @@ getgenv().Visuals = {
         },
 
         FoVs = {
-           
-        SilentAim = {
+            SilentAim = {
                 Enabled = false,
                 Size = 200,
                 Thickness = 2,
@@ -239,7 +236,6 @@ Visuals.WorldToViewportPoint = Camera.WorldToViewportPoint
 
 local ConnectionsTable = Visuals.Connections
 local ObjectsTable = Visuals.Objects
-local DrawingsTable = Visuals.Drawings
 local FolderLocation = Visuals.Folder
 local VisualsErrors = Visuals.Errors
 local VisualsSettings = Visuals.Settings
@@ -249,7 +245,9 @@ local FontsToDownload = {
     ["Minecraftia"] = {Link = "https://github.com/LuckyHub1/LuckyHub/raw/refs/heads/main/Minecraftia.ttf"},
     ["Silkscreen"] = {Link = "https://github.com/LuckyHub1/LuckyHub/raw/refs/heads/main/Silkscreen.ttf"},
     ["ProggyClean"] = {Link = "https://github.com/LuckyHub1/LuckyHub/raw/main/ProggyClean.ttf", FileName = "Proggy Clean"},
-}; do
+}
+
+do
     for Name, Table in FontsToDownload do
         local fileKey = Table.FileName or Name
         local ttfPath = FontsFolder .. "\\" .. fileKey .. ".ttf"
@@ -945,7 +943,7 @@ end
 do 
     Visuals.Init()
 
-    Utility.AddConnection(RunService.PostSimulation, LPH_NO_VIRTUALIZE(function(Delta)
+    Utility.AddConnection(RunService.Heartbeat, LPH_NO_VIRTUALIZE(function(Delta)
         local dt = type(Delta) == "number" and Delta > 0 and Delta or (1 / 60)
         local CrosshairObject = Visuals.Crosshair
 
