@@ -868,6 +868,23 @@
             return sanitized_name
         end
 
+        function library:coerce_toggle_value(value)
+            if type(value) == "boolean" then
+                return value
+            end
+
+            if type(value) == "string" then
+                local lowered = string.lower(value)
+                return lowered == "true" or lowered == "1"
+            end
+
+            if type(value) == "number" then
+                return value ~= 0
+            end
+
+            return false
+        end
+
         function library:coerce_color_value(value)
             if typeof(value) == "Color3" then
                 return value
@@ -1275,7 +1292,7 @@
                 Load = function(idx, data)
                     local object = library.Toggles[idx]
                     if object and object.SetValue then
-                        object:SetValue(data.value)
+                        object:SetValue(library:coerce_toggle_value(data.value))
                     end
                 end,
             },
@@ -1285,7 +1302,7 @@
                 end,
                 Load = function(idx, data)
                     local object = library.Options[idx]
-                    if object and object.SetValue then
+                    if object and object.SetValue and data.value ~= nil then
                         object:SetValue(data.value)
                     end
                 end,
@@ -1296,7 +1313,7 @@
                 end,
                 Load = function(idx, data)
                     local object = library.Options[idx]
-                    if object and object.SetValue then
+                    if object and object.SetValue and data.value ~= nil then
                         object:SetValue(data.value)
                     end
                 end,
@@ -1474,6 +1491,36 @@
             end
         end
 
+        function library:apply_loaded_config_callbacks(loaded_objects)
+            if type(loaded_objects) ~= "table" then
+                return
+            end
+
+            for idx, object_type in pairs(loaded_objects) do
+                if object_type == "Toggle" then
+                    local object = library.Toggles[idx]
+                    if object and object.callback then
+                        pcall(object.callback, object.Value)
+                    end
+                elseif object_type == "Slider" or object_type == "Dropdown" or object_type == "Input" then
+                    local object = library.Options[idx]
+                    if object and object.callback and object.Value ~= nil then
+                        pcall(object.callback, object.Value)
+                    end
+                elseif object_type == "ColorPicker" then
+                    local object = library.Options[idx]
+                    if object and object.callback and object.Value then
+                        pcall(object.callback, object.Value, object.Transparency or 0)
+                    end
+                elseif object_type == "KeyPicker" then
+                    local object = library.Options[idx]
+                    if object and object.callback then
+                        pcall(object.callback, object.Active)
+                    end
+                end
+            end
+        end
+
         function library:load_config_from_name(name)
             local path, sanitize_result = library:resolve_storage_path(library:get_place_config_directory(), name)
             if not path then
@@ -1531,6 +1578,8 @@
             library.config_loading = true
 
             if typeof(objects) == "table" then
+                local loaded_objects = {}
+
                 table.sort(objects, function(left_object, right_object)
                     local left_index = find(library.config_loading_order, left_object.type) or math.huge
                     local right_index = find(library.config_loading_order, right_object.type) or math.huge
@@ -1539,17 +1588,15 @@
 
                 for _, object_data in ipairs(objects) do
                     if object_data.type and not library.config_ignore[object_data.idx] and library.config_parser[object_data.type] then
-                        library:debug_config("apply object", object_data.type, object_data.idx)
-                        local ok, err = pcall(library.config_parser[object_data.type].Load, object_data.idx, object_data)
-                        if not ok then
-                            library:debug_config("object load failed", object_data.type, object_data.idx, err)
+                        local ok = pcall(library.config_parser[object_data.type].Load, object_data.idx, object_data)
+                        if ok then
+                            loaded_objects[object_data.idx] = object_data.type
                         end
-                    else
-                        library:debug_config("skipped object", object_data.type, object_data.idx)
                     end
                 end
 
                 library.config_loading = false
+                library:apply_loaded_config_callbacks(loaded_objects)
                 library:run_config_finalize()
                 return
             end
@@ -3238,9 +3285,17 @@
             end 
 
             function cfg.set(bool)
+                bool = library:coerce_toggle_value(bool)
+
                 cfg.enabled = bool
                 cfg.Value = bool
                 cfg.update(bool)
+                flags[cfg.flag] = bool
+
+                if library.config_loading then
+                    return
+                end
+
                 cfg.callback(bool)
             end 
             
@@ -3479,6 +3534,11 @@
                 items[ "value" ].Text = tostring(cfg.value) .. cfg.suffix
 
                 flags[cfg.flag] = cfg.value
+
+                if library.config_loading then
+                    return
+                end
+
                 cfg.callback(flags[cfg.flag])
             end
 
@@ -3875,11 +3935,36 @@
             end
             
             function cfg.set(value)
+                if value == nil then
+                    return
+                end
+
+                local is_table = type(value) == "table"
+                if is_table then
+                    if cfg.multi then
+                        local normalized = {}
+                        for _, entry in ipairs(value) do
+                            if type(entry) == "string" and entry ~= "" then
+                                insert(normalized, entry)
+                            end
+                        end
+                        value = normalized
+                    else
+                        value = value[1] or value.value or value.Value
+                        if type(value) ~= "string" then
+                            return
+                        end
+                        is_table = false
+                    end
+                elseif type(value) ~= "string" then
+                    return
+                end
+
                 local selected = {}
-                local isTable = type(value) == "table"
+                local is_multi_table = type(value) == "table"
 
                 for _, option in cfg.option_instances do 
-                    if option.Text == value or (isTable and find(value, option.Text)) then 
+                    if option.Text == value or (is_multi_table and find(value, option.Text)) then 
                         insert(selected, option.Text)
                         cfg.multi_items = selected
                         option.TextColor3 = themes.preset.accent
@@ -3888,10 +3973,19 @@
                     end
                 end
 
-                items[ "sub_text" ].Text = isTable and concat(selected, ", ") or selected[1] or ""
-                flags[cfg.flag] = isTable and selected or selected[1]
+                local display_text = is_multi_table and concat(selected, ", ") or (selected[1] or "")
+                if type(display_text) ~= "string" then
+                    display_text = tostring(display_text or "")
+                end
+
+                items[ "sub_text" ].Text = display_text
+                flags[cfg.flag] = is_multi_table and selected or selected[1]
                 cfg.Value = flags[cfg.flag]
-                
+
+                if library.config_loading then
+                    return
+                end
+
                 cfg.callback(flags[cfg.flag]) 
             end
             
@@ -4575,6 +4669,10 @@
                     library:round(1 - a, 0.01)
                 )
                 
+                if library.config_loading then
+                    return
+                end
+
                 if cfg.callback then
                     cfg.callback(Color, a)
                 end
@@ -4790,10 +4888,18 @@
             end 
             
             function cfg.set(text) 
+                if type(text) ~= "string" then
+                    return
+                end
+
                 flags[cfg.flag] = text
                 cfg.Value = text
 
                 items[ "input" ].Text = text
+
+                if library.config_loading then
+                    return
+                end
 
                 cfg.callback(text)
             end 
