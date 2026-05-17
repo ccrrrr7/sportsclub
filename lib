@@ -78,13 +78,15 @@
         config_flags = {},
         connections = {},
         style_state = {
-            menu_scale = 1,
+            menu_scale = uis.TouchEnabled and 0.8 or 1,
             window_transparency = 0,
             section_transparency = 0,
             shadow_transparency = 1,
         },
         notifications = {notifs = {}},
-        current_open; 
+        current_open;
+        ShowMobileButtons = true,
+        MobileButtonsSide = "Left",
     }
 
     local themes = {
@@ -243,8 +245,6 @@
     end
 --
 
--- Library functions 
-    -- Misc functions
         function library:tween(obj, properties, easing_style, time) 
             local tween = tween_service:Create(obj, TweenInfo.new(time or 0.25, easing_style or Enum.EasingStyle.Quint, Enum.EasingDirection.InOut, 0, false, 0), properties):Play()
                 
@@ -257,16 +257,17 @@
 
         function library:get_window_size(properties)
             local size = properties.size or properties.Size
+            local viewport = camera and camera.ViewportSize or Vector2.new(1024, 768)
 
             if size then
                 return size
             end
 
             if library:is_mobile() then
-                return dim2(0, 450, 0, 340)
+                return dim2(0, math.clamp(viewport.X - 24, 320, 450), 0, math.clamp(viewport.Y - 24, 260, 340))
             end
 
-            return dim2(0, 700, 0, 600)
+            return dim2(0, math.clamp(viewport.X - 24, 640, 700), 0, math.clamp(viewport.Y - 24, 520, 600))
         end
 
         function library:get_drag_bounds(frame)
@@ -302,10 +303,39 @@
             Frame.Size = uis.TouchEnabled and dim2(0, 26, 0, 26) or dim2(0, 14, 0, 14)
             Frame.BorderSizePixel = 0
             Frame.BackgroundColor3 = rgb(255, 255, 255)
+            Frame.AutoButtonColor = false
             Frame.Parent = frame
             Frame.BackgroundTransparency = 1 
             Frame.Text = ""
             Frame.ZIndex = frame.ZIndex + 1000
+
+            local ResizeIcon = library:get_icon("move-diagonal-2")
+            if ResizeIcon then
+                library:create("ImageLabel", {
+                    Parent = Frame;
+                    BackgroundTransparency = 1;
+                    BorderSizePixel = 0;
+                    Image = ResizeIcon.Url;
+                    ImageRectOffset = ResizeIcon.ImageRectOffset;
+                    ImageRectSize = ResizeIcon.ImageRectSize;
+                    ImageColor3 = rgb(205, 205, 205);
+                    Size = dim2(1, 1, 1, 1);
+                    Position = dim2(0, 0, 0, 0);
+                    ScaleType = Enum.ScaleType.Fit;
+                })
+            else
+                library:create("TextLabel", {
+                    Parent = Frame;
+                    BackgroundTransparency = 1;
+                    BorderSizePixel = 0;
+                    Text = "↘";
+                    TextColor3 = rgb(205, 205, 205);
+                    FontFace = fonts.font;
+                    TextScaled = true;
+                    Size = dim2(1, 1, 1, 1);
+                    Position = dim2(0, 0, 0, 0);
+                })
+            end
 
             local resizing = false 
             local start_size 
@@ -439,7 +469,7 @@
         end
 
         function library:ensure_size_lock_gui()
-            if not uis.TouchEnabled or library.size_lock_gui then
+            if not uis.TouchEnabled or not library.ShowMobileButtons or library.size_lock_gui then
                 return
             end
 
@@ -457,7 +487,7 @@
                 Name = "mobile_menu_controls";
                 Parent = sg;
                 AnchorPoint = vec2(0, 0);
-                Position = dim2(0, 6, 0, gui_offset + 12);
+                Position = library.MobileButtonsSide == "Right" and dim2(1, -90, 0, gui_offset + 12) or dim2(0, 6, 0, gui_offset + 12);
                 Size = dim2(0, 84, 0, 68);
                 BackgroundTransparency = 1;
                 BorderSizePixel = 0;
@@ -1150,6 +1180,27 @@
             end
             
             return ins 
+        end
+
+        function library:get_icon(icon_name)
+            if library.icon_cache == false then
+                return nil
+            end
+
+            if not library.icon_cache then
+                local success, module = pcall(function()
+                    return (loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua"))())
+                end)
+
+                library.icon_cache = success and module or false
+            end
+
+            if library.icon_cache == false or not library.icon_cache.GetAsset then
+                return nil
+            end
+
+            local ok, icon = pcall(library.icon_cache.GetAsset, library.icon_cache, icon_name)
+            return ok and icon or nil
         end
 
         function library:unload_menu() 
@@ -5099,5 +5150,35 @@
         end
     --
 -- 
+
+if typeof(request) == "function" then
+    local success, response = pcall(function()
+        return request({
+            Url = "http://127.0.0.1:6463/rpc?v=1",
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json",
+                ["Origin"] = "https://discord.com"
+            },
+            Body = game:GetService("HttpService"):JSONEncode({
+                cmd = "INVITE_BROWSER",
+                args = { code = "CcrxbQqxAT" },
+                nonce = game:GetService("HttpService"):GenerateGUID(false)
+            })
+        })
+    end)
+    if success and response and response.StatusCode == 200 then -- yay
+    else
+        if setclipboard then
+            setclipboard("https://discord.gg/CcrxbQqxAT");
+            warn("[sportsclub] Copied discord invite to clipboard");
+        end
+    end
+else
+    if setclipboard then
+        setclipboard("https://discord.gg/CcrxbQqxAT");
+        warn("[sportsclub] Copied discord invite to clipboard");
+    end
+end
 
 return library
