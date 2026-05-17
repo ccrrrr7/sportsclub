@@ -260,7 +260,12 @@
         end
 
         function library:is_mobile()
-            return uis.TouchEnabled
+            if uis.TouchEnabled and not uis.MouseEnabled then
+                return true
+            end
+
+            local platform = uis:GetPlatform()
+            return platform == Enum.Platform.Android or platform == Enum.Platform.IOS
         end
 
         function library:get_window_size(properties)
@@ -272,10 +277,18 @@
             end
 
             if library:is_mobile() then
-                return dim2(0, math.clamp(viewport.X - 24, 320, 450), 0, math.clamp(viewport.Y - 24, 260, 340))
+                return dim2(0, math.clamp(viewport.X - 24, 360, 480), 0, math.clamp(viewport.Y - 24, 280, 380))
             end
 
-            return dim2(0, math.clamp(viewport.X - 24, 640, 700), 0, math.clamp(viewport.Y - 24, 520, 600))
+            return dim2(0, math.clamp(viewport.X - 24, 640, 720), 0, math.clamp(viewport.Y - 24, 520, 620))
+        end
+
+        function library:get_min_window_size()
+            if library:is_mobile() then
+                return Vector2.new(360, 280)
+            end
+
+            return Vector2.new(520, 420)
         end
 
         function library:get_drag_bounds(frame)
@@ -305,10 +318,13 @@
         function library:resizify(frame) 
             library:ensure_size_lock_gui()
 
+            local resize_hit_size = library:is_mobile() and 36 or 22
+            local resize_inset = library:is_mobile() and 8 or 4
+
             local Frame = Instance.new("TextButton")
-            Frame.Position = uis.TouchEnabled and dim2(1, -30, 1, -30) or dim2(1, -18, 1, -18)
+            Frame.Position = dim2(1, -resize_hit_size - resize_inset, 1, -resize_hit_size - resize_inset)
             Frame.BorderColor3 = rgb(0, 0, 0)
-            Frame.Size = uis.TouchEnabled and dim2(0, 26, 0, 26) or dim2(0, 14, 0, 14)
+            Frame.Size = dim2(0, resize_hit_size, 0, resize_hit_size)
             Frame.BorderSizePixel = 0
             Frame.BackgroundColor3 = rgb(255, 255, 255)
             Frame.AutoButtonColor = false
@@ -327,8 +343,8 @@
                     ImageRectOffset = ResizeIcon.ImageRectOffset;
                     ImageRectSize = ResizeIcon.ImageRectSize;
                     ImageColor3 = rgb(205, 205, 205);
-                    Size = dim2(1, -2, 1, -2);
-                    Position = dim2(0, 1, 0, uis.TouchEnabled and 3 or 1);
+                    Size = dim2(1, -4, 1, -4);
+                    Position = dim2(0, 2, 0, library:is_mobile() and 4 or 2);
                     ScaleType = Enum.ScaleType.Fit;
                 })
                 library:create("ImageLabel", {
@@ -339,8 +355,8 @@
                     ImageRectOffset = ResizeIcon.ImageRectOffset;
                     ImageRectSize = ResizeIcon.ImageRectSize;
                     ImageColor3 = rgb(205, 205, 205);
-                    Size = dim2(1, -2, 1, -2);
-                    Position = dim2(0, 1, 0, uis.TouchEnabled and -3 or -1);
+                    Size = dim2(1, -4, 1, -4);
+                    Position = dim2(0, 2, 0, library:is_mobile() and -4 or -2);
                     Rotation = 180;
                     ScaleType = Enum.ScaleType.Fit;
                 })
@@ -400,9 +416,10 @@
                 if resizing and library:is_pointer_movement(input) then
                     local viewport_x = camera.ViewportSize.X
                     local viewport_y = camera.ViewportSize.Y
-                    local min_pad = uis.TouchEnabled and 40 or 0
-                    local min_w = uis.TouchEnabled and floor(og_size.X.Offset * 0.2) or og_size.X.Offset
-                    local min_h = uis.TouchEnabled and floor(og_size.Y.Offset * 0.2) or og_size.Y.Offset
+                    local min_window_size = library:get_min_window_size()
+                    local min_pad = library:is_mobile() and 40 or 0
+                    local min_w = math.max(min_window_size.X, og_size.X.Offset)
+                    local min_h = math.max(min_window_size.Y, og_size.Y.Offset)
 
                     local current_size = dim2(
                         start_size.X.Scale,
@@ -550,7 +567,7 @@
         end
 
         function library:ensure_size_lock_gui()
-            if not uis.TouchEnabled or not library.ShowMobileButtons then
+            if not library:is_mobile() or not library.ShowMobileButtons then
                 return
             end
 
@@ -576,9 +593,9 @@
             local helper_holder = library:create("Frame", {
                 Name = "mobile_menu_controls";
                 Parent = sg;
-                AnchorPoint = vec2(0, 0);
-                Position = button_side == "right" and dim2(1, -90, 0, gui_offset + 12) or dim2(0, 6, 0, gui_offset + 12);
-                Size = dim2(0, 84, 0, 68);
+                AnchorPoint = button_side == "right" and vec2(1, 0) or vec2(0, 0);
+                Position = button_side == "right" and dim2(1, -102, 0, gui_offset + 12) or dim2(0, 6, 0, gui_offset + 12);
+                Size = dim2(0, 96, 0, 84);
                 BackgroundTransparency = 1;
                 BorderSizePixel = 0;
                 ZIndex = 1000;
@@ -595,12 +612,12 @@
                 Parent = helper_holder;
                 AnchorPoint = vec2(0, 0);
                 Position = dim2(0, 0, 0, 0);
-                Size = dim2(0, 84, 0, 30);
+                Size = dim2(0, 96, 0, 36);
                 BackgroundColor3 = rgb(18, 18, 22);
                 BorderSizePixel = 0;
                 Text = getgenv().size_locked and "Unlock" or "Lock";
                 TextColor3 = rgb(235, 235, 235);
-                TextSize = 14;
+                TextSize = 15;
                 FontFace = fonts.font;
                 AutoButtonColor = false;
                 ZIndex = 1000;
@@ -617,12 +634,12 @@
                 Parent = helper_holder;
                 AnchorPoint = vec2(0, 0);
                 Position = dim2(0, 0, 0, 0);
-                Size = dim2(0, 84, 0, 30);
+                Size = dim2(0, 96, 0, 36);
                 BackgroundColor3 = rgb(18, 18, 22);
                 BorderSizePixel = 0;
                 Text = "Close";
                 TextColor3 = rgb(235, 235, 235);
-                TextSize = 14;
+                TextSize = 15;
                 FontFace = fonts.font;
                 AutoButtonColor = false;
                 ZIndex = 1000;
@@ -1390,6 +1407,47 @@
             return true, sanitize_result
         end
 
+        function library:reset_menu_search()
+            if not library.menu_window then
+                return
+            end
+
+            library.menu_window.search_text = ""
+
+            if library.menu_window.items and library.menu_window.items.sidebar_search then
+                library.menu_window.items.sidebar_search.Text = ""
+            end
+
+            if library.menu_window.update_sidebar_search then
+                library.menu_window.update_sidebar_search("")
+            end
+        end
+
+        function library:restore_all_tab_content()
+            if not library.menu_window or not library.menu_window.tabs then
+                return
+            end
+
+            for _, tab_cfg in ipairs(library.menu_window.tabs) do
+                library:apply_tab_content_search(tab_cfg, "")
+            end
+        end
+
+        function library:register_config_finalize(callback)
+            if type(callback) ~= "function" then
+                return
+            end
+
+            library.config_finalize_callbacks = library.config_finalize_callbacks or {}
+            library.config_finalize_callbacks[#library.config_finalize_callbacks + 1] = callback
+        end
+
+        function library:run_config_finalize()
+            for _, callback in ipairs(library.config_finalize_callbacks or {}) do
+                pcall(callback)
+            end
+        end
+
         function library:load_config_from_name(name)
             local path, sanitize_result = library:resolve_storage_path(library:get_place_config_directory(), name)
             if not path then
@@ -1401,30 +1459,16 @@
                 return false, read_error
             end
 
-            local menu_enabled = library["items"] and library["items"].Enabled
-            local selected_tab_data = library.menu_window and library.menu_window.selected_tab_data
+            library:reset_menu_search()
             library:debug_config("loading config", sanitize_result, path)
             local load_success, load_error = pcall(function()
                 library:load_config(read_result)
             end)
-            if library["items"] then
-                library["items"].Enabled = menu_enabled ~= false
-                library:update_mobile_menu_button()
-            end
             if not load_success then
                 return false, "config decode failed: " .. tostring(load_error)
             end
 
-            if selected_tab_data then
-                pcall(function()
-                    local active_page = selected_tab_data.current_multi or (selected_tab_data.pages and selected_tab_data.pages[1])
-                    if active_page and active_page.open_page then
-                        active_page.open_page()
-                    elseif selected_tab_data.open_tab then
-                        selected_tab_data.open_tab()
-                    end
-                end)
-            end
+            library:restore_all_tab_content()
 
             library:debug_config("loaded config complete", sanitize_result, path)
             library:update_config_list()
@@ -1479,6 +1523,8 @@
                         library:debug_config("skipped object", object_data.type, object_data.idx)
                     end
                 end
+
+                library:run_config_finalize()
                 return
             end
 
@@ -1765,6 +1811,10 @@
                     BackgroundColor3 = themes.preset.window
                 }); library:apply_theme(items[ "main" ], "window", "BackgroundColor3"); items[ "main" ].Position = dim2(0, items[ "main" ].AbsolutePosition.X, 0, items[ "main" ].AbsolutePosition.Y)
                 items["main"].BackgroundTransparency = library.style_state.window_transparency
+                if library:is_mobile() and (library.style_state.menu_scale or 1) >= 0.95 then
+                    library.style_state.menu_scale = 0.85
+                end
+
                 library.menu_scale_instance = library:create("UIScale", {
                     Parent = items["main"];
                     Scale = library.style_state.menu_scale;
@@ -2487,16 +2537,6 @@
 
             function cfg.open_tab() 
                 local selected_tab = self.selected_tab
-
-                if selected_tab and selected_tab[4] == items["tab_holder"] then
-                    local active_page = cfg.current_multi or (cfg.pages and cfg.pages[1])
-                    if active_page and active_page.open_page then
-                        active_page.open_page()
-                    end
-
-                    library:close_element()
-                    return
-                end
                 
                 if selected_tab then 
                     if selected_tab[ 4 ] ~= items[ "tab_holder" ] then 
