@@ -1620,41 +1620,83 @@
             return true, sanitize_result
         end
 
-        function library:load_config(config_json) 
-            local decoded = http_service:JSONDecode(config_json)
-            local objects = decoded.objects
+        function library:load_config(config_json)
+            local ok, decoded = pcall(function()
+                return http_service:JSONDecode(config_json)
+            end)
 
-            if typeof(objects) == "table" then
-                for _, object_data in ipairs(objects) do
-                    if object_data.idx and object_data.type then
-                        if object_data.type == "ColorPicker" then
-                            library:apply_config_flag(object_data.idx, object_data, "ColorPicker")
-                        elseif object_data.type == "KeyPicker" then
-                            library:apply_config_flag(object_data.idx, {
-                                mode = object_data.mode,
-                                key = object_data.key,
-                                active = object_data.active,
-                            }, "KeyPicker")
-                        elseif object_data.type == "Input" then
-                            library:apply_config_flag(object_data.idx, object_data.text, "Input")
-                        else
-                            library:apply_config_flag(object_data.idx, object_data.value, object_data.type)
+            if not ok or type(decoded) ~= "table" then
+                return
+            end
+
+            local success, err = pcall(function()
+                local objects = decoded.objects
+
+                if type(objects) == "table" then
+                    for _, object_data in ipairs(objects) do
+                        if object_data and object_data.idx and object_data.type then
+                            if object_data.type == "ColorPicker" then
+                                library:apply_config_flag(object_data.idx, object_data, "ColorPicker")
+                            elseif object_data.type == "KeyPicker" then
+                                library:apply_config_flag(object_data.idx, {
+                                    mode = object_data.mode,
+                                    key = object_data.key,
+                                    active = object_data.active,
+                                }, "KeyPicker")
+                            elseif object_data.type == "Input" then
+                                library:apply_config_flag(object_data.idx, object_data.text, "Input")
+                            else
+                                library:apply_config_flag(object_data.idx, object_data.value, object_data.type)
+                            end
                         end
+                    end
+
+                    library:run_config_finalize()
+                    return
+                end
+
+                -- fallback: support legacy flat config format (old_lib.lua style)
+                for flag_name, value in pairs(decoded) do
+                    if flag_name == "objects" then
+                        continue
+                    end
+
+                    local function_set = library.config_flags[flag_name]
+                    if not function_set then
+                        continue
+                    end
+
+                    if type(value) == "table" and (value.Transparency ~= nil and value.Color ~= nil) then
+                        local ok_color, color_val = pcall(function()
+                            return library:coerce_color_value(value.Color)
+                        end)
+
+                        if ok_color and color_val then
+                            pcall(function_set, color_val, tonumber(value.Transparency) or tonumber(value.transparency) or 0)
+                        end
+                    elseif type(value) == "table" and (value.mode ~= nil or value.key ~= nil or value.active ~= nil) then
+                        local key_value = value.key
+                        if type(key_value) == "string" and key_value ~= "NONE" and tostring(key_value):find("Enum", 1, true) then
+                            key_value = library:convert_enum(key_value)
+                        end
+
+                        pcall(function_set, {
+                            mode = value.mode,
+                            key = key_value,
+                            active = value.active,
+                        })
+                    else
+                        pcall(function_set, value)
                     end
                 end
 
                 library:run_config_finalize()
-                return
-            end
+            end)
 
-            for flag_name, value in pairs(decoded) do
-                if flag_name ~= "objects" then
-                    library:apply_config_flag(flag_name, value)
-                end
+            if not success then
+                warn("load_config failed:", err)
             end
-
-            library:run_config_finalize()
-        end 
+        end
         
         function library:round(number, float) 
             if typeof(number) ~= "number" then
