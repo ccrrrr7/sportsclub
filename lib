@@ -836,6 +836,7 @@
         end
 
         library.storage_extensions = {"cfg", "json", "txt"}
+        library.storage_save_extension = "cfg"
 
         function library:debug_config(message, ...)
             local parts = {"[sportsclub config] " .. tostring(message)}
@@ -909,6 +910,15 @@
             end
 
             return paths, sanitized_name
+        end
+
+        function library:get_storage_save_path(directory, name)
+            local sanitized_name = library:sanitize_storage_name(name)
+            if sanitized_name == "" then
+                return nil, "missing config name"
+            end
+
+            return directory .. "/" .. sanitized_name .. "." .. library.storage_save_extension, sanitized_name
         end
 
         function library:get_config_path(name)
@@ -1128,8 +1138,8 @@
         end
 
         function library:save_style(name)
-            local paths, sanitize_result = library:get_style_paths(name)
-            if not paths then
+            local path, sanitize_result = library:get_storage_save_path(library.directory .. "/styling", name)
+            if not path then
                 return false, sanitize_result
             end
 
@@ -1140,14 +1150,12 @@
                 return false, "style encode failed: " .. tostring(payload_result)
             end
 
-            for _, path in ipairs(paths) do
-                local write_success, write_result = library:write_json_file(path, payload_result)
-                if not write_success then
-                    return false, write_result
-                end
+            local write_success, write_result = library:write_json_file(path, payload_result)
+            if not write_success then
+                return false, write_result
             end
 
-            library:debug_config("saved style", sanitize_result, unpack_table(paths))
+            library:debug_config("saved style", sanitize_result, path)
             library:update_style_list()
 
             return true, sanitize_result
@@ -1360,8 +1368,8 @@
         end
 
         function library:save_config(name)
-            local paths, sanitize_result = library:get_config_paths(name)
-            if not paths then
+            local path, sanitize_result = library:get_storage_save_path(library:get_place_config_directory(), name)
+            if not path then
                 return false, sanitize_result
             end
 
@@ -1372,14 +1380,12 @@
                 return false, "config encode failed: " .. tostring(payload_result)
             end
 
-            for _, path in ipairs(paths) do
-                local write_success, write_result = library:write_json_file(path, payload_result)
-                if not write_success then
-                    return false, write_result
-                end
+            local write_success, write_result = library:write_json_file(path, payload_result)
+            if not write_success then
+                return false, write_result
             end
 
-            library:debug_config("saved config", sanitize_result, "objects", #(http_service:JSONDecode(payload_result).objects or {}), unpack_table(paths))
+            library:debug_config("saved config", sanitize_result, "objects", #(http_service:JSONDecode(payload_result).objects or {}), path)
             library:update_config_list()
             return true, sanitize_result
         end
@@ -1409,9 +1415,14 @@
                 return false, "config decode failed: " .. tostring(load_error)
             end
 
-            if selected_tab_data and selected_tab_data.open_tab then
+            if selected_tab_data then
                 pcall(function()
-                    selected_tab_data.open_tab()
+                    local active_page = selected_tab_data.current_multi or (selected_tab_data.pages and selected_tab_data.pages[1])
+                    if active_page and active_page.open_page then
+                        active_page.open_page()
+                    elseif selected_tab_data.open_tab then
+                        selected_tab_data.open_tab()
+                    end
                 end)
             end
 
@@ -1460,12 +1471,10 @@
                 for _, object_data in ipairs(objects) do
                     if object_data.type and not library.config_ignore[object_data.idx] and library.config_parser[object_data.type] then
                         library:debug_config("apply object", object_data.type, object_data.idx)
-                        task.spawn(function()
-                            local ok, err = pcall(library.config_parser[object_data.type].Load, object_data.idx, object_data)
-                            if not ok then
-                                library:debug_config("object load failed", object_data.type, object_data.idx, err)
-                            end
-                        end)
+                        local ok, err = pcall(library.config_parser[object_data.type].Load, object_data.idx, object_data)
+                        if not ok then
+                            library:debug_config("object load failed", object_data.type, object_data.idx, err)
+                        end
                     else
                         library:debug_config("skipped object", object_data.type, object_data.idx)
                     end
@@ -1608,6 +1617,110 @@
     --
     
     -- Library element functions
+        function library:register_search_feature(tab_cfg, feature)
+            if not tab_cfg or not feature or feature.text == nil then
+                return
+            end
+
+            tab_cfg.search_features = tab_cfg.search_features or {}
+            feature.kind = feature.kind or "control"
+            feature.text_lower = string.lower(tostring(feature.text))
+            feature.page_name = tostring(feature.page_name or "")
+            feature.section_name = tostring(feature.section_name or "")
+
+            if feature.info and feature.info ~= "" then
+                feature.info_lower = string.lower(tostring(feature.info))
+            end
+
+            tab_cfg.search_features[#tab_cfg.search_features + 1] = feature
+        end
+
+        function library:feature_matches_search(feature, search_text)
+            if search_text == "" then
+                return true
+            end
+
+            local search_blob = feature.text_lower
+                .. " "
+                .. string.lower(feature.page_name)
+                .. " "
+                .. string.lower(feature.section_name)
+
+            if feature.info_lower then
+                search_blob = search_blob .. " " .. feature.info_lower
+            end
+
+            if feature.parent_control then
+                search_blob = search_blob .. " " .. string.lower(tostring(feature.parent_control))
+            end
+
+            return string.find(search_blob, search_text, 1, true) ~= nil
+        end
+
+        function library:apply_tab_content_search(tab_cfg, search_text)
+            search_text = tostring(search_text or ""):lower()
+
+            if not tab_cfg or not tab_cfg.search_features then
+                return
+            end
+
+            if search_text == "" then
+                for _, feature in ipairs(tab_cfg.search_features) do
+                    if feature.holder and feature.holder.Parent then
+                        feature.holder.Visible = true
+                    end
+                end
+                return
+            end
+
+            local is_selected_tab = library.menu_window and library.menu_window.selected_tab_data == tab_cfg
+            if not is_selected_tab then
+                return
+            end
+
+            local active_page = tab_cfg.current_multi
+            local matched_page = nil
+
+            for _, feature in ipairs(tab_cfg.search_features) do
+                if library:feature_matches_search(feature, search_text) and feature.page then
+                    matched_page = feature.page
+                    break
+                end
+            end
+
+            if matched_page and matched_page.open_page and tab_cfg.current_multi ~= matched_page then
+                matched_page.open_page()
+                active_page = matched_page
+            end
+
+            local section_visible = {}
+
+            for _, feature in ipairs(tab_cfg.search_features) do
+                local on_active_page = not feature.page or feature.page == active_page
+                local matches = library:feature_matches_search(feature, search_text)
+
+                if feature.kind == "section" then
+                    if on_active_page and matches and feature.holder and feature.holder.Parent then
+                        feature.holder.Visible = true
+                        section_visible[feature.holder] = true
+                    end
+                elseif feature.holder and feature.holder.Parent and on_active_page then
+                    feature.holder.Visible = matches
+                    if matches and feature.section_outline then
+                        section_visible[feature.section_outline] = true
+                    end
+                end
+            end
+
+            for _, feature in ipairs(tab_cfg.search_features) do
+                if feature.kind == "section" and feature.holder and feature.holder.Parent and feature.page == active_page then
+                    if not library:feature_matches_search(feature, search_text) then
+                        feature.holder.Visible = section_visible[feature.holder] == true
+                    end
+                end
+            end
+        end
+
         function library:window(properties)
             local cfg = { 
                 suffix = properties.suffix or properties.Suffix or "sports";
@@ -1740,7 +1853,7 @@
                     Text = "";
                     Parent = items[ "side_frame" ];
                     Name = "\0";
-                    Position = dim2(0, 10, 0, 44);
+                    Position = dim2(0, 10, 0, 52);
                     Size = dim2(1, -20, 0, 24);
                     BorderSizePixel = 0;
                     TextXAlignment = Enum.TextXAlignment.Left;
@@ -1957,6 +2070,26 @@
                 end
             end
 
+            function cfg.tab_matches_search(entry)
+                if cfg.search_text == "" then
+                    return true
+                end
+
+                if string.find(string.lower(entry.text), cfg.search_text, 1, true) then
+                    return true
+                end
+
+                if entry.tab and entry.tab.search_features then
+                    for _, feature in ipairs(entry.tab.search_features) do
+                        if library:feature_matches_search(feature, cfg.search_text) then
+                            return true
+                        end
+                    end
+                end
+
+                return false
+            end
+
             function cfg.update_sidebar_search(search_text)
                 cfg.search_text = tostring(search_text or ""):lower()
 
@@ -1965,7 +2098,7 @@
 
                 for _, entry in ipairs(cfg.search_entries) do
                     if entry.kind == "tab" then
-                        local is_visible = cfg.search_text == "" or string.find(string.lower(entry.text), cfg.search_text, 1, true) ~= nil
+                        local is_visible = cfg.tab_matches_search(entry)
                         entry.object.Visible = is_visible
                         visible_tabs[entry] = is_visible
 
@@ -1998,9 +2131,16 @@
 
                 apply_separator_visibility()
 
+                for _, tab_cfg in ipairs(cfg.tabs) do
+                    library:apply_tab_content_search(tab_cfg, cfg.search_text)
+                end
+
                 local selected_tab_data = library.menu_window and library.menu_window.selected_tab_data
                 if first_visible_tab and selected_tab_data and not visible_tabs[selected_tab_data.search_entry] then
                     first_visible_tab.tab.open_tab()
+                    library:apply_tab_content_search(first_visible_tab.tab, cfg.search_text)
+                elseif selected_tab_data and visible_tabs[selected_tab_data.search_entry] then
+                    library:apply_tab_content_search(selected_tab_data, cfg.search_text)
                 end
             end
 
@@ -2037,6 +2177,7 @@
                 tabs = properties.tabs or properties.Tabs or {"Main", "Misc.", "Settings"};
                 pages = {}; -- data store for multi sections
                 current_multi; 
+                search_features = {};
                 
                 items = {};
             } 
@@ -2273,6 +2414,12 @@
                         data.accent = multi_items[ "accent" ]
                         data.button = multi_items[ "button" ]
                         data.page = multi_items[ "tab" ]
+                        data.page_name = section
+                        data.search_context = {
+                            tab = cfg;
+                            page = data;
+                            page_name = section;
+                        }
                         data.parent = setmetatable(data, library):sub_tab({}).items[ "tab_parent" ]
                         
                         -- Old column code
@@ -2340,6 +2487,16 @@
 
             function cfg.open_tab() 
                 local selected_tab = self.selected_tab
+
+                if selected_tab and selected_tab[4] == items["tab_holder"] then
+                    local active_page = cfg.current_multi or (cfg.pages and cfg.pages[1])
+                    if active_page and active_page.open_page then
+                        active_page.open_page()
+                    end
+
+                    library:close_element()
+                    return
+                end
                 
                 if selected_tab then 
                     if selected_tab[ 4 ] ~= items[ "tab_holder" ] then 
@@ -2442,7 +2599,11 @@
 
         -- Miscellaneous 
             function library:column(properties) 
-                local cfg = {items = {}, size = properties.size or 1}
+                local cfg = {
+                    items = {};
+                    size = properties.size or 1;
+                    search_context = self.search_context;
+                }
 
                 local items = cfg.items; do     
                     items[ "column" ] = library:create( "Frame" , {
@@ -2502,6 +2663,7 @@
         --
 
         function library:section(properties)
+            local parent_context = self.search_context
             local cfg = {
                 name = properties.name or properties.Name or "section"; 
                 side = properties.side or properties.Side or "left";
@@ -2509,6 +2671,7 @@
                 size = properties.size or properties.Size or self.size or 0.5; 
                 icon = properties.icon or properties.Icon or "http://www.roblox.com/asset/?id=6022668898";
                 fading_toggle = properties.fading or properties.Fading or false;
+                search_context = parent_context;
                 items = {};
             };
             
@@ -2744,6 +2907,27 @@
                 end 
             end 
 
+            if parent_context and parent_context.tab then
+                cfg.search_context = {
+                    tab = parent_context.tab;
+                    page = parent_context.page;
+                    page_name = parent_context.page_name;
+                    section = cfg;
+                    section_name = cfg.name;
+                    section_outline = items["outline"];
+                }
+
+                library:register_search_feature(parent_context.tab, {
+                    kind = "section";
+                    text = cfg.name;
+                    page = parent_context.page;
+                    page_name = parent_context.page_name;
+                    section_name = cfg.name;
+                    holder = items["outline"];
+                    section_outline = items["outline"];
+                })
+            end
+
             return setmetatable(cfg, library)
         end  
 
@@ -2752,6 +2936,7 @@
                 enabled = options.enabled or nil,
                 name = options.name or "Toggle",
                 info = options.info or nil,
+                search_context = self.search_context,
                 flag = library:get_control_flag(self.name, options.name or "toggle", "toggle", options.flag),
                 
                 type = options.type and string.lower(options.type) or "toggle",
@@ -3016,6 +3201,20 @@
 
             config_flags[cfg.flag] = cfg.set
 
+            if cfg.search_context and cfg.search_context.tab then
+                library:register_search_feature(cfg.search_context.tab, {
+                    kind = "control";
+                    text = cfg.name;
+                    info = cfg.info;
+                    page = cfg.search_context.page;
+                    page_name = cfg.search_context.page_name;
+                    section_name = cfg.search_context.section_name;
+                    holder = items["toggle"];
+                    section_outline = cfg.search_context.section_outline;
+                    parent_control = cfg.search_context.parent_control;
+                })
+            end
+
             return setmetatable(cfg, library)
         end 
         
@@ -3023,6 +3222,7 @@
             local cfg = {
                 name = options.name or nil,
                 suffix = options.suffix or "",
+                search_context = self.search_context,
                 flag = library:get_control_flag(self.name, options.name or "slider", "slider", options.flag),
                 callback = options.callback or function() end, 
                 info = options.info or nil; 
@@ -3255,6 +3455,20 @@
             library.Options[cfg.flag] = cfg
             config_flags[cfg.flag] = cfg.set
 
+            if cfg.search_context and cfg.search_context.tab and cfg.name then
+                library:register_search_feature(cfg.search_context.tab, {
+                    kind = "control";
+                    text = cfg.name;
+                    info = cfg.info;
+                    page = cfg.search_context.page;
+                    page_name = cfg.search_context.page_name;
+                    section_name = cfg.search_context.section_name;
+                    holder = items["slider_object"];
+                    section_outline = cfg.search_context.section_outline;
+                    parent_control = cfg.search_context.parent_control;
+                })
+            end
+
             return setmetatable(cfg, library)
         end 
 
@@ -3262,6 +3476,7 @@
             local cfg = {
                 name = options.name or nil;
                 info = options.info or nil;
+                search_context = self.search_context,
                 flag = library:get_control_flag(self.name, options.name or "dropdown", "dropdown", options.flag);
                 options = options.items or {""};
                 callback = options.callback or function() end;
@@ -3708,6 +3923,20 @@
             
             cfg.refresh_options(cfg.options)
             cfg.set(cfg.default)
+
+            if cfg.search_context and cfg.search_context.tab and cfg.name then
+                library:register_search_feature(cfg.search_context.tab, {
+                    kind = "control";
+                    text = cfg.name;
+                    info = cfg.info;
+                    page = cfg.search_context.page;
+                    page_name = cfg.search_context.page_name;
+                    section_name = cfg.search_context.section_name;
+                    holder = items["dropdown_object"];
+                    section_outline = cfg.search_context.section_outline;
+                    parent_control = cfg.search_context.parent_control;
+                })
+            end
                 
             return setmetatable(cfg, library)
         end
@@ -3715,7 +3944,9 @@
         function library:label(options)
             local cfg = {
                 enabled = options.enabled or nil,
-                name = options.name or "Toggle",
+                name = options.name or "Label",
+                search_context = self.search_context,
+                flag_scope = options.flag_scope or self.name,
                 seperator = options.seperator or options.Seperator or false;
                 info = options.info or nil; 
 
@@ -3815,13 +4046,29 @@
                 items[ "name" ].Text = text
             end
 
+            if cfg.search_context and cfg.search_context.tab then
+                library:register_search_feature(cfg.search_context.tab, {
+                    kind = "control";
+                    text = cfg.name;
+                    info = cfg.info;
+                    page = cfg.search_context.page;
+                    page_name = cfg.search_context.page_name;
+                    section_name = cfg.search_context.section_name;
+                    holder = items["label"];
+                    section_outline = cfg.search_context.section_outline;
+                    parent_control = cfg.search_context.parent_control;
+                })
+            end
+
             return setmetatable(cfg, library)
         end 
         
         function library:colorpicker(options) 
+            local scope_name = self.flag_scope or self.name
+            local control_name = options.name or self.name or "color"
             local cfg = {
                 name = options.name or "Color", 
-                flag = library:get_control_flag(self.name, options.name or "color", "colorpicker", options.flag),
+                flag = library:get_control_flag(scope_name, control_name, "colorpicker", options.flag),
 
                 color = options.color or color(1, 1, 1), -- Default to white color if not provided
                 alpha = options.alpha and 1 - options.alpha or 0,
@@ -4349,6 +4596,21 @@
             library.Options[cfg.flag] = cfg
             config_flags[cfg.flag] = cfg.set
 
+            local colorpicker_search_context = self.search_context or (label and label.search_context)
+            if colorpicker_search_context and colorpicker_search_context.tab then
+                local colorpicker_holder = (self.items and self.items["label"]) or (label and label.items and label.items["label"]) or items["colorpicker"]
+                library:register_search_feature(colorpicker_search_context.tab, {
+                    kind = "control";
+                    text = control_name ~= "color" and control_name or (self.name or cfg.name);
+                    page = colorpicker_search_context.page;
+                    page_name = colorpicker_search_context.page_name;
+                    section_name = colorpicker_search_context.section_name;
+                    holder = colorpicker_holder;
+                    section_outline = colorpicker_search_context.section_outline;
+                    parent_control = colorpicker_search_context.parent_control;
+                })
+            end
+
             return setmetatable(cfg, library)
         end 
 
@@ -4357,6 +4619,7 @@
                 name = options.name or "TextBox",
                 placeholder = options.placeholder or options.placeholdertext or options.holder or options.holdertext or "type here...",
                 default = options.default or "",
+                search_context = self.search_context,
                 flag = library:get_control_flag(self.name, options.name or "textbox", "textbox", options.flag),
                 callback = options.callback or function() end,
                 visible = options.visible or true,
@@ -4485,6 +4748,19 @@
 
             config_flags[cfg.flag] = cfg.set
 
+            if cfg.search_context and cfg.search_context.tab then
+                library:register_search_feature(cfg.search_context.tab, {
+                    kind = "control";
+                    text = cfg.name;
+                    page = cfg.search_context.page;
+                    page_name = cfg.search_context.page_name;
+                    section_name = cfg.search_context.section_name;
+                    holder = items["textbox"];
+                    section_outline = cfg.search_context.section_outline;
+                    parent_control = cfg.search_context.parent_control;
+                })
+            end
+
             return setmetatable(cfg, library)
         end
 
@@ -4494,6 +4770,7 @@
                 callback = options.callback or function() end,
                 name = options.name or nil, 
                 ignore_key = options.ignore or false, 
+                search_context = self.search_context,
 
                 key = options.key or nil, 
                 mode = options.mode or "Toggle",
@@ -4830,12 +5107,26 @@
             library.Options[cfg.flag] = cfg
             config_flags[cfg.flag] = cfg.set
 
+            if cfg.search_context and cfg.search_context.tab and cfg.name then
+                library:register_search_feature(cfg.search_context.tab, {
+                    kind = "control";
+                    text = cfg.name;
+                    page = cfg.search_context.page;
+                    page_name = cfg.search_context.page_name;
+                    section_name = cfg.search_context.section_name;
+                    holder = items["keybind_element"];
+                    section_outline = cfg.search_context.section_outline;
+                    parent_control = cfg.search_context.parent_control;
+                })
+            end
+
             return setmetatable(cfg, library)
         end
 
         function library:button(options) 
             local cfg = {
                 name = options.name or "TextBox",
+                search_context = self.search_context,
                 callback = options.callback or function() end,
                 items = {};
             }
@@ -4895,16 +5186,39 @@
                 items[ "name" ].TextColor3 = themes.preset.accent 
                 library:tween(items[ "name" ], {TextColor3 = rgb(245, 245, 245)})
             end)
+
+            if cfg.search_context and cfg.search_context.tab then
+                library:register_search_feature(cfg.search_context.tab, {
+                    kind = "control";
+                    text = cfg.name;
+                    page = cfg.search_context.page;
+                    page_name = cfg.search_context.page_name;
+                    section_name = cfg.search_context.section_name;
+                    holder = items["button_element"];
+                    section_outline = cfg.search_context.section_outline;
+                    parent_control = cfg.search_context.parent_control;
+                })
+            end
             
             return setmetatable(cfg, library)
         end 
 
         function library:settings(options)  
+            local parent_context = self.search_context
             local cfg = {
                 open = false; 
                 items = {}; 
                 sanity = true; -- made this for my own sanity.
                 name = self.name;
+                search_context = parent_context and {
+                    tab = parent_context.tab;
+                    page = parent_context.page;
+                    page_name = parent_context.page_name;
+                    section = parent_context.section;
+                    section_name = parent_context.section_name;
+                    section_outline = parent_context.section_outline;
+                    parent_control = self.name;
+                } or nil;
             }
 
             local items = cfg.items; do 
