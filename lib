@@ -298,7 +298,7 @@
             library:ensure_size_lock_gui()
 
             local Frame = Instance.new("TextButton")
-            Frame.Position = dim2(1, -10, 1, -10)
+            Frame.Position = uis.TouchEnabled and dim2(1, -30, 1, -30) or dim2(1, -18, 1, -18)
             Frame.BorderColor3 = rgb(0, 0, 0)
             Frame.Size = uis.TouchEnabled and dim2(0, 26, 0, 26) or dim2(0, 14, 0, 14)
             Frame.BorderSizePixel = 0
@@ -466,6 +466,19 @@
 
             local menu_enabled = library[ "items" ] and library[ "items" ].Enabled == true
             library.mobile_menu_button.Text = menu_enabled and "Close" or "Open"
+        end
+
+        function library:update_mobile_buttons_side()
+            if not library.size_lock_gui or not library.size_lock_gui.Parent then
+                return
+            end
+
+            local helper_holder = library.size_lock_gui:FindFirstChild("mobile_menu_controls")
+            if not helper_holder then
+                return
+            end
+
+            helper_holder.Position = library.MobileButtonsSide == "Right" and dim2(1, -90, 0, gui_offset + 12) or dim2(0, 6, 0, gui_offset + 12)
         end
 
         function library:ensure_size_lock_gui()
@@ -1009,17 +1022,75 @@
             })
         end
 
+        function library:serialize_config_value(value)
+            if type(value) == "table" and value.key then
+                return {active = value.active, mode = value.mode, key = tostring(value.key)}
+            end
+
+            if type(value) == "table" and value["Transparency"] ~= nil and value["Color"] ~= nil then
+                local color_value = value["Color"]
+                local red, green, blue
+
+                if typeof(color_value) == "Color3" then
+                    red = math.floor((color_value.R * 255) + 0.5)
+                    green = math.floor((color_value.G * 255) + 0.5)
+                    blue = math.floor((color_value.B * 255) + 0.5)
+                elseif type(color_value) == "table" then
+                    red = tonumber(color_value.R or color_value.r or color_value.Red or color_value.red or color_value[1])
+                    green = tonumber(color_value.G or color_value.g or color_value.Green or color_value.green or color_value[2])
+                    blue = tonumber(color_value.B or color_value.b or color_value.Blue or color_value.blue or color_value[3])
+                end
+
+                local serialized_color = typeof(color_value) == "Color3" and color_value:ToHex() or tostring(color_value)
+                return {
+                    Transparency = tonumber(value["Transparency"]) or 0,
+                    Color = serialized_color,
+                    Red = red,
+                    Green = green,
+                    Blue = blue
+                }
+            end
+
+            return value
+        end
+
+        function library:deserialize_config_color_value(value)
+            if type(value) ~= "table" then
+                return nil, nil
+            end
+
+            local transparency = tonumber(value["Transparency"] or value["transparency"] or value["alpha"]) or 0
+            local color_value = value["Color"] or value["color"]
+
+            if type(color_value) == "string" and color_value ~= "" then
+                local color_success, decoded_color = pcall(hex, color_value)
+                if color_success and typeof(decoded_color) == "Color3" then
+                    return decoded_color, transparency
+                end
+            end
+
+            local red = tonumber(value["Red"] or value["red"] or value["R"] or value["r"] or value[1])
+            local green = tonumber(value["Green"] or value["green"] or value["G"] or value["g"] or value[2])
+            local blue = tonumber(value["Blue"] or value["blue"] or value["B"] or value["b"] or value[3])
+
+            if red and green and blue then
+                if red > 1 or green > 1 or blue > 1 then
+                    red = red / 255
+                    green = green / 255
+                    blue = blue / 255
+                end
+
+                return Color3.new(red, green, blue), transparency
+            end
+
+            return nil, transparency
+        end
+
         function library:get_config()
             local Config = {}
             
             for _, v in next, flags do
-                if type(v) == "table" and v.key then
-                    Config[_] = {active = v.active, mode = v.mode, key = tostring(v.key)}
-                elseif type(v) == "table" and v["Transparency"] and v["Color"] then
-                    Config[_] = {Transparency = v["Transparency"], Color = v["Color"]:ToHex()}
-                else
-                    Config[_] = v
-                end
+                Config[_] = library:serialize_config_value(v)
             end 
             
             return http_service:JSONEncode(Config)
@@ -1063,6 +1134,7 @@
             end
 
             local menu_enabled = library["items"] and library["items"].Enabled
+            local selected_tab_data = library.menu_window and library.menu_window.selected_tab_data
             local load_success, load_error = pcall(function()
                 library:load_config(read_result)
             end)
@@ -1072,6 +1144,12 @@
             end
             if not load_success then
                 return false, "config decode failed: " .. tostring(load_error)
+            end
+
+            if selected_tab_data and selected_tab_data.open_tab then
+                pcall(function()
+                    selected_tab_data.open_tab()
+                end)
             end
 
             library:update_config_list()
@@ -1108,8 +1186,9 @@
                 end
 
                 if function_set then 
-                    if type(v) == "table" and v["Transparency"] and v["Color"] then
-                        function_set(hex(v["Color"]), v["Transparency"])
+                    local color_value, transparency_value = library:deserialize_config_color_value(v)
+                    if color_value then
+                        function_set(color_value, transparency_value)
                     elseif type(v) == "table" and v["active"] then 
                         function_set(v)
                     else
@@ -1462,8 +1541,8 @@
                     TextColor3 = themes.preset.accent;
                     BorderColor3 = rgb(0, 0, 0);
                     Text = '<font color="rgb(72, 72, 73)">' .. (cfg.keyInfo or "9999999 days left") .. ', </font>' .. cfg.name .. cfg.suffix;
-                    Size = dim2(1, 0, 0, 0);
-                    Position = dim2(0, -10, 0.5, -1);
+                    Size = dim2(1, -26, 0, 0);
+                    Position = dim2(0, -28, 0.5, -1);
                     AnchorPoint = vec2(0, 0.5);
                     BorderSizePixel = 0;
                     BackgroundTransparency = 1;
@@ -1835,6 +1914,12 @@
                     items[ "tab_holder" ];
                     items[ "multi_section_button_holder" ];
                 }
+                self.selected_tab_data = cfg
+
+                local active_page = cfg.current_multi or cfg.pages[1]
+                if active_page and active_page.open_page then
+                    active_page.open_page()
+                end
 
                 library:close_element()
             end
@@ -4746,6 +4831,10 @@
             styling_manage:textbox({name = "Style name:", flag = "style_name_text"})
             local style_autoload_label = styling_manage:label({name = "autoload: none"})
             styling_manage:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.LeftControl, callback = function(bool) window.toggle_menu(bool) end, default = true})
+            styling_manage:dropdown({name = "Mobile Buttons Side", flag = "mobile_buttons_side", options = {"Left", "Right"}, default = library.MobileButtonsSide, callback = function(value)
+                library.MobileButtonsSide = value
+                library:update_mobile_buttons_side()
+            end})
             styling_manage:colorpicker({name = "Menu Accent", flag = "style_accent_color", callback = function(color_value, alpha) library:update_theme("accent", color_value) end, color = themes.preset.accent})
             styling_manage:colorpicker({name = "Window Color", flag = "menu_window_color", callback = function(color_value, alpha) library:update_theme("window", color_value) end, color = themes.preset.window})
             styling_manage:colorpicker({name = "Section Color", flag = "menu_section_color", callback = function(color_value, alpha) library:update_theme("section", color_value) end, color = themes.preset.section})
