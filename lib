@@ -855,15 +855,7 @@
         library.storage_extensions = {"cfg", "json", "txt"}
         library.storage_save_extension = "cfg"
 
-        function library:debug_config(message, ...)
-            local parts = {"[sportsclub config] " .. tostring(message)}
-            local extra = table.pack(...)
-
-            for index = 1, extra.n do
-                parts[#parts + 1] = tostring(extra[index])
-            end
-
-            warn(table.concat(parts, " | "))
+        function library:debug_config()
         end
 
         function library:sanitize_storage_name(name)
@@ -882,9 +874,19 @@
             end
 
             if type(value) == "string" and value ~= "" then
-                local success, color_value = pcall(hex, value:gsub("^#", ""))
-                if success then
-                    return color_value
+                local hex_string = value:gsub("^#", "")
+                if #hex_string == 6 or #hex_string == 8 then
+                    local success, color_value = pcall(hex, "#" .. hex_string:sub(1, 6))
+                    if success and typeof(color_value) == "Color3" then
+                        return color_value
+                    end
+
+                    local red_value = tonumber(hex_string:sub(1, 2), 16)
+                    local green_value = tonumber(hex_string:sub(3, 4), 16)
+                    local blue_value = tonumber(hex_string:sub(5, 6), 16)
+                    if red_value and green_value and blue_value then
+                        return rgb(red_value, green_value, blue_value)
+                    end
                 end
             end
 
@@ -1272,7 +1274,7 @@
                 end,
                 Load = function(idx, data)
                     local object = library.Toggles[idx]
-                    if object and object.SetValue and object.Value ~= data.value then
+                    if object and object.SetValue then
                         object:SetValue(data.value)
                     end
                 end,
@@ -1283,7 +1285,7 @@
                 end,
                 Load = function(idx, data)
                     local object = library.Options[idx]
-                    if object and object.SetValue and object.Value ~= data.value then
+                    if object and object.SetValue then
                         object:SetValue(data.value)
                     end
                 end,
@@ -1301,16 +1303,34 @@
             },
             ColorPicker = {
                 Save = function(idx, object)
-                    return { type = "ColorPicker", idx = idx, value = object.Value:ToHex(), transparency = object.Transparency }
+                    local color_value = object.Value
+                    if typeof(color_value) ~= "Color3" and type(color_value) == "table" then
+                        color_value = color_value.Color
+                    end
+
+                    if typeof(color_value) ~= "Color3" then
+                        return nil
+                    end
+
+                    return {
+                        type = "ColorPicker",
+                        idx = idx,
+                        value = color_value:ToHex():gsub("^#", ""),
+                        transparency = tonumber(object.Transparency) or 0,
+                    }
                 end,
                 Load = function(idx, data)
                     local object = library.Options[idx]
+                    if not object or not object.SetValueRGB then
+                        return
+                    end
+
                     local color_value = library:coerce_color_value(data.value)
                     if not color_value and type(data.value) == "table" then
                         color_value = library:coerce_color_value(data.value.Color or data.value)
                     end
 
-                    if object and object.SetValueRGB and color_value then
+                    if color_value then
                         object:SetValueRGB(color_value, tonumber(data.transparency) or 0)
                     end
                 end,
@@ -1371,13 +1391,19 @@
 
             for idx, toggle in pairs(library.Toggles) do
                 if not library.config_ignore[idx] and toggle.Type and library.config_parser[toggle.Type] then
-                    insert(data.objects, library.config_parser[toggle.Type].Save(idx, toggle))
+                    local save_success, saved_object = pcall(library.config_parser[toggle.Type].Save, idx, toggle)
+                    if save_success and type(saved_object) == "table" then
+                        insert(data.objects, saved_object)
+                    end
                 end
             end
 
             for idx, option in pairs(library.Options) do
                 if not library.config_ignore[idx] and option.Type and library.config_parser[option.Type] then
-                    insert(data.objects, library.config_parser[option.Type].Save(idx, option))
+                    local save_success, saved_object = pcall(library.config_parser[option.Type].Save, idx, option)
+                    if save_success and type(saved_object) == "table" then
+                        insert(data.objects, saved_object)
+                    end
                 end
             end
 
