@@ -1491,34 +1491,83 @@
             end
         end
 
-        function library:apply_loaded_config_callbacks(loaded_objects)
-            if type(loaded_objects) ~= "table" then
-                return
+        function library:apply_config_flag(flag_name, value, object_type)
+            if not flag_name or library.config_ignore[flag_name] then
+                return false
             end
 
-            for idx, object_type in pairs(loaded_objects) do
-                if object_type == "Toggle" then
-                    local object = library.Toggles[idx]
-                    if object and object.callback then
-                        pcall(object.callback, object.Value)
-                    end
-                elseif object_type == "Slider" or object_type == "Dropdown" or object_type == "Input" then
-                    local object = library.Options[idx]
-                    if object and object.callback and object.Value ~= nil then
-                        pcall(object.callback, object.Value)
-                    end
-                elseif object_type == "ColorPicker" then
-                    local object = library.Options[idx]
-                    if object and object.callback and object.Value then
-                        pcall(object.callback, object.Value, object.Transparency or 0)
-                    end
-                elseif object_type == "KeyPicker" then
-                    local object = library.Options[idx]
-                    if object and object.callback then
-                        pcall(object.callback, object.Active)
-                    end
-                end
+            local function_set = library.config_flags[flag_name]
+            if not function_set then
+                return false
             end
+
+            if object_type == "ColorPicker" then
+                local color_value = library:coerce_color_value(value.value)
+                if not color_value and type(value) == "table" then
+                    color_value = library:coerce_color_value(value.Color)
+                end
+
+                if color_value then
+                    pcall(function_set, color_value, tonumber(value.transparency) or tonumber(value.Transparency) or 0)
+                    return true
+                end
+
+                return false
+            end
+
+            if object_type == "KeyPicker" then
+                local key_value = value.key
+                if type(key_value) == "string" and key_value ~= "NONE" and tostring(key_value):find("Enum", 1, true) then
+                    key_value = library:convert_enum(key_value)
+                end
+
+                pcall(function_set, {
+                    mode = value.mode,
+                    key = key_value,
+                    active = value.active,
+                })
+                return true
+            end
+
+            if object_type == "Input" then
+                if type(value) == "string" then
+                    pcall(function_set, value)
+                    return true
+                end
+
+                return false
+            end
+
+            if type(value) == "table" and (value.Color ~= nil or value.color ~= nil) and (value.Transparency ~= nil or value.transparency ~= nil) then
+                local color_value = library:coerce_color_value(value.Color or value.color)
+                if color_value then
+                    pcall(function_set, color_value, tonumber(value.Transparency) or tonumber(value.transparency) or 0)
+                    return true
+                end
+
+                return false
+            end
+
+            if type(value) == "table" and (value.mode ~= nil or value.key ~= nil or value.active ~= nil) then
+                local key_value = value.key
+                if type(key_value) == "string" and key_value ~= "NONE" and tostring(key_value):find("Enum", 1, true) then
+                    key_value = library:convert_enum(key_value)
+                end
+
+                pcall(function_set, {
+                    mode = value.mode,
+                    key = key_value,
+                    active = value.active,
+                })
+                return true
+            end
+
+            if value ~= nil then
+                pcall(function_set, value)
+                return true
+            end
+
+            return false
         end
 
         function library:load_config_from_name(name)
@@ -1575,53 +1624,35 @@
             local decoded = http_service:JSONDecode(config_json)
             local objects = decoded.objects
 
-            library.config_loading = true
-
             if typeof(objects) == "table" then
-                local loaded_objects = {}
-
-                table.sort(objects, function(left_object, right_object)
-                    local left_index = find(library.config_loading_order, left_object.type) or math.huge
-                    local right_index = find(library.config_loading_order, right_object.type) or math.huge
-                    return left_index < right_index
-                end)
-
                 for _, object_data in ipairs(objects) do
-                    if object_data.type and not library.config_ignore[object_data.idx] and library.config_parser[object_data.type] then
-                        local ok = pcall(library.config_parser[object_data.type].Load, object_data.idx, object_data)
-                        if ok then
-                            loaded_objects[object_data.idx] = object_data.type
+                    if object_data.idx and object_data.type then
+                        if object_data.type == "ColorPicker" then
+                            library:apply_config_flag(object_data.idx, object_data, "ColorPicker")
+                        elseif object_data.type == "KeyPicker" then
+                            library:apply_config_flag(object_data.idx, {
+                                mode = object_data.mode,
+                                key = object_data.key,
+                                active = object_data.active,
+                            }, "KeyPicker")
+                        elseif object_data.type == "Input" then
+                            library:apply_config_flag(object_data.idx, object_data.text, "Input")
+                        else
+                            library:apply_config_flag(object_data.idx, object_data.value, object_data.type)
                         end
                     end
                 end
 
-                library.config_loading = false
-                library:apply_loaded_config_callbacks(loaded_objects)
                 library:run_config_finalize()
                 return
             end
 
-            library:debug_config("legacy config detected")
-            for key, value in pairs(decoded) do
-                local function_set = library.config_flags[key]
-                if key ~= "config_name_list" and key ~= "style_name_list" and function_set then
-                    library:debug_config("apply legacy entry", key, typeof(value))
-                    if type(value) == "table" and value["Color"] and value["Transparency"] ~= nil then
-                        local color_value = library:coerce_color_value(value)
-                        if color_value then
-                            function_set(color_value, value["Transparency"])
-                        else
-                            function_set(value)
-                        end
-                    elseif type(value) == "table" and value["mode"] and value["key"] ~= nil then
-                        function_set(value)
-                    else
-                        function_set(value)
-                    end
+            for flag_name, value in pairs(decoded) do
+                if flag_name ~= "objects" then
+                    library:apply_config_flag(flag_name, value)
                 end
             end
 
-            library.config_loading = false
             library:run_config_finalize()
         end 
         
@@ -3291,11 +3322,6 @@
                 cfg.Value = bool
                 cfg.update(bool)
                 flags[cfg.flag] = bool
-
-                if library.config_loading then
-                    return
-                end
-
                 cfg.callback(bool)
             end 
             
@@ -3534,11 +3560,6 @@
                 items[ "value" ].Text = tostring(cfg.value) .. cfg.suffix
 
                 flags[cfg.flag] = cfg.value
-
-                if library.config_loading then
-                    return
-                end
-
                 cfg.callback(flags[cfg.flag])
             end
 
@@ -3981,11 +4002,6 @@
                 items[ "sub_text" ].Text = display_text
                 flags[cfg.flag] = is_multi_table and selected or selected[1]
                 cfg.Value = flags[cfg.flag]
-
-                if library.config_loading then
-                    return
-                end
-
                 cfg.callback(flags[cfg.flag]) 
             end
             
@@ -4669,10 +4685,6 @@
                     library:round(1 - a, 0.01)
                 )
                 
-                if library.config_loading then
-                    return
-                end
-
                 if cfg.callback then
                     cfg.callback(Color, a)
                 end
@@ -4896,11 +4908,6 @@
                 cfg.Value = text
 
                 items[ "input" ].Text = text
-
-                if library.config_loading then
-                    return
-                end
-
                 cfg.callback(text)
             end 
             
