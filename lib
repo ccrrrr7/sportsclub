@@ -64,6 +64,7 @@
     local find = table.find 
     local remove = table.remove
     local concat = table.concat
+    local unpack_table = table.unpack or unpack
 -- 
 
 -- Library init
@@ -84,6 +85,11 @@
             window_transparency = 0,
             section_transparency = 0,
             shadow_transparency = 1,
+            sidebar_search_enabled = true,
+            notify_side = "Left",
+            sidebar_width = 196,
+            mobile_button_scale = 1,
+            show_mobile_buttons = true,
         },
         notifications = {notifs = {}},
         current_open;
@@ -321,8 +327,8 @@
                     ImageRectOffset = ResizeIcon.ImageRectOffset;
                     ImageRectSize = ResizeIcon.ImageRectSize;
                     ImageColor3 = rgb(205, 205, 205);
-                    Size = dim2(1, 1, 1, 1);
-                    Position = dim2(0, 0, 0, 0);
+                    Size = dim2(1, -2, 1, -2);
+                    Position = dim2(0, 1, 0, uis.TouchEnabled and 3 or 1);
                     ScaleType = Enum.ScaleType.Fit;
                 })
                 library:create("ImageLabel", {
@@ -333,8 +339,8 @@
                     ImageRectOffset = ResizeIcon.ImageRectOffset;
                     ImageRectSize = ResizeIcon.ImageRectSize;
                     ImageColor3 = rgb(205, 205, 205);
-                    Size = dim2(1, 1, 1, 1);
-                    Position = dim2(0, 0, 0, uis.TouchEnabled and -10 or -6);
+                    Size = dim2(1, -2, 1, -2);
+                    Position = dim2(0, 1, 0, uis.TouchEnabled and -3 or -1);
                     Rotation = 180;
                     ScaleType = Enum.ScaleType.Fit;
                 })
@@ -347,8 +353,8 @@
                     TextColor3 = rgb(205, 205, 205);
                     FontFace = fonts.font;
                     TextScaled = true;
-                    Size = dim2(1, 1, 1, 1);
-                    Position = dim2(0, 0, 0, 0);
+                    Size = dim2(1, -2, 1, -2);
+                    Position = dim2(0, 1, 0, uis.TouchEnabled and 3 or 1);
                 })
                 library:create("TextLabel", {
                     Parent = Frame;
@@ -358,8 +364,8 @@
                     TextColor3 = rgb(205, 205, 205);
                     FontFace = fonts.font;
                     TextScaled = true;
-                    Size = dim2(1, 1, 1, 1);
-                    Position = dim2(0, 0, 0, uis.TouchEnabled and -10 or -6);
+                    Size = dim2(1, -2, 1, -2);
+                    Position = dim2(0, 1, 0, uis.TouchEnabled and -3 or -1);
                 })
             end
 
@@ -515,11 +521,44 @@
                 return
             end
 
-            helper_holder.Position = library.MobileButtonsSide == "Right" and dim2(1, -90, 0, gui_offset + 12) or dim2(0, 6, 0, gui_offset + 12)
+            local button_side = tostring(library.MobileButtonsSide or "Left"):lower()
+            helper_holder.Position = button_side == "right" and dim2(1, -90, 0, gui_offset + 12) or dim2(0, 6, 0, gui_offset + 12)
+        end
+
+        function library:update_mobile_button_scale(value)
+            local button_scale = clamp(tonumber(value) or 1, 0.8, 1.5)
+            library.style_state.mobile_button_scale = button_scale
+
+            if library.mobile_buttons_scale_instance and library.mobile_buttons_scale_instance.Parent then
+                library.mobile_buttons_scale_instance.Scale = button_scale
+            end
+        end
+
+        function library:update_mobile_buttons_visibility(value)
+            library.ShowMobileButtons = value ~= false
+            library.style_state.show_mobile_buttons = library.ShowMobileButtons
+
+            if library.ShowMobileButtons then
+                if library.size_lock_gui and library.size_lock_gui.Parent then
+                    library.size_lock_gui.Enabled = true
+                else
+                    library:ensure_size_lock_gui()
+                end
+            elseif library.size_lock_gui and library.size_lock_gui.Parent then
+                library.size_lock_gui.Enabled = false
+            end
         end
 
         function library:ensure_size_lock_gui()
-            if not uis.TouchEnabled or not library.ShowMobileButtons or library.size_lock_gui then
+            if not uis.TouchEnabled or not library.ShowMobileButtons then
+                return
+            end
+
+            if library.size_lock_gui then
+                library.size_lock_gui.Enabled = true
+                if library.mobile_buttons_scale_instance and library.mobile_buttons_scale_instance.Parent then
+                    library.mobile_buttons_scale_instance.Scale = library.style_state.mobile_button_scale
+                end
                 return
             end
 
@@ -533,11 +572,12 @@
                 ZIndexBehavior = Enum.ZIndexBehavior.Global;
             })
 
+            local button_side = tostring(library.MobileButtonsSide or "Left"):lower()
             local helper_holder = library:create("Frame", {
                 Name = "mobile_menu_controls";
                 Parent = sg;
                 AnchorPoint = vec2(0, 0);
-                Position = library.MobileButtonsSide == "Right" and dim2(1, -90, 0, gui_offset + 12) or dim2(0, 6, 0, gui_offset + 12);
+                Position = button_side == "right" and dim2(1, -90, 0, gui_offset + 12) or dim2(0, 6, 0, gui_offset + 12);
                 Size = dim2(0, 84, 0, 68);
                 BackgroundTransparency = 1;
                 BorderSizePixel = 0;
@@ -565,6 +605,11 @@
                 AutoButtonColor = false;
                 ZIndex = 1000;
                 Visible = true;
+            })
+
+            library.mobile_buttons_scale_instance = library:create("UIScale", {
+                Parent = helper_holder;
+                Scale = library.style_state.mobile_button_scale;
             })
 
             local menu_btn = library:create("TextButton", {
@@ -790,18 +835,85 @@
             return library:get_place_config_directory() .. "/autoload.txt"
         end
 
+        library.storage_extensions = {"cfg", "json", "txt"}
+
+        function library:debug_config(message, ...)
+            local parts = {"[sportsclub config] " .. tostring(message)}
+            local extra = table.pack(...)
+
+            for index = 1, extra.n do
+                parts[#parts + 1] = tostring(extra[index])
+            end
+
+            warn(table.concat(parts, " | "))
+        end
+
         function library:sanitize_storage_name(name)
             local sanitized_name = tostring(name or ""):gsub("[%c\\/:*?\"<>|]", ""):gsub("^%s+", ""):gsub("%s+$", "")
+
+            for _, extension in ipairs(library.storage_extensions) do
+                sanitized_name = sanitized_name:gsub("%." .. extension .. "$", "")
+            end
+
             return sanitized_name
         end
 
-        function library:get_config_path(name)
+        function library:coerce_color_value(value)
+            if typeof(value) == "Color3" then
+                return value
+            end
+
+            if type(value) == "string" and value ~= "" then
+                local success, color_value = pcall(hex, value:gsub("^#", ""))
+                if success then
+                    return color_value
+                end
+            end
+
+            if type(value) == "table" then
+                if typeof(value.Color) == "Color3" then
+                    return value.Color
+                end
+
+                if type(value.Color) == "string" and value.Color ~= "" then
+                    local success, color_value = pcall(hex, tostring(value.Color):gsub("^#", ""))
+                    if success then
+                        return color_value
+                    end
+                end
+
+                local red_value = tonumber(value.R or value.r or value[1])
+                local green_value = tonumber(value.G or value.g or value[2])
+                local blue_value = tonumber(value.B or value.b or value[3])
+                if red_value and green_value and blue_value then
+                    if red_value <= 1 and green_value <= 1 and blue_value <= 1 then
+                        return color(red_value, green_value, blue_value)
+                    end
+
+                    return rgb(red_value, green_value, blue_value)
+                end
+            end
+
+            return nil
+        end
+
+        function library:get_storage_paths(directory, name)
             local sanitized_name = library:sanitize_storage_name(name)
             if sanitized_name == "" then
                 return nil, "missing config name"
             end
 
-            return library:get_place_config_directory() .. "/" .. sanitized_name .. ".cfg", sanitized_name
+            local paths = {}
+            for _, extension in ipairs(library.storage_extensions) do
+                paths[#paths + 1] = directory .. "/" .. sanitized_name .. "." .. extension
+            end
+
+            return paths, sanitized_name
+        end
+
+        function library:get_config_path(name)
+            local paths, sanitized_name = library:get_storage_paths(library:get_place_config_directory(), name)
+            return paths and paths[1] or nil, sanitized_name
         end
 
         function library:get_style_path(name)
@@ -811,6 +923,67 @@
             end
 
             return library.directory .. "/styling/" .. sanitized_name .. ".cfg", sanitized_name
+        end
+
+        function library:get_style_paths(name)
+            return library:get_storage_paths(library.directory .. "/styling", name)
+        end
+
+        function library:get_config_paths(name)
+            return library:get_storage_paths(library:get_place_config_directory(), name)
+        end
+
+        function library:resolve_storage_path(directory, name)
+            local paths, sanitized_name = library:get_storage_paths(directory, name)
+            if not paths then
+                return nil, sanitized_name
+            end
+
+            for _, path in ipairs(paths) do
+                if isfile(path) then
+                    return path, sanitized_name
+                end
+            end
+
+            return nil, sanitized_name
+        end
+
+        function library:get_storage_names(directory)
+            local names = {}
+            local seen_names = {}
+            local success, files = pcall(function()
+                return listfiles(directory)
+            end)
+
+            if not success or not files then
+                library:debug_config("failed to list storage directory", directory, files)
+                return names
+            end
+
+            for _, file in ipairs(files) do
+                local file_name = file:match("([^\\/]+)$")
+                local matched_name
+
+                if file_name then
+                    for _, extension in ipairs(library.storage_extensions) do
+                        matched_name = file_name:match("^(.*)%." .. extension .. "$")
+                        if matched_name then
+                            break
+                        end
+                    end
+                end
+
+                if matched_name and not seen_names[matched_name] then
+                    seen_names[matched_name] = true
+                    names[#names + 1] = matched_name
+                end
+            end
+
+            table.sort(names, function(left_name, right_name)
+                return tostring(left_name):lower() < tostring(right_name):lower()
+            end)
+
+            return names
         end
 
         function library:read_json_file(path)
@@ -892,27 +1065,8 @@
             if not config_holder then 
                 return 
             end
-            
-            local list = {}
 
-            local success, files = pcall(function()
-                return listfiles(library:get_place_config_directory())
-            end)
-
-            if success and files then
-                for _, file in files do
-                    local name = file:match("([^\\/]+)%.cfg$")
-                    if name then
-                        list[#list + 1] = name
-                    end
-                end
-            end
-
-            table.sort(list, function(left_name, right_name)
-                return tostring(left_name):lower() < tostring(right_name):lower()
-            end)
-
-            config_holder.refresh_options(list)
+            config_holder.refresh_options(library:get_storage_names(library:get_place_config_directory()))
         end 
 
         function library:update_style_list()
@@ -920,26 +1074,7 @@
                 return
             end
 
-            local list = {}
-
-            local success, files = pcall(function()
-                return listfiles(library.directory .. "/styling")
-            end)
-
-            if success and files then
-                for _, file in files do
-                    local name = file:match("([^\\/]+)%.cfg$")
-                    if name then
-                        list[#list + 1] = name
-                    end
-                end
-            end
-
-            table.sort(list, function(left_name, right_name)
-                return tostring(left_name):lower() < tostring(right_name):lower()
-            end)
-
-            style_holder.refresh_options(list)
+            style_holder.refresh_options(library:get_storage_names(library.directory .. "/styling"))
         end
 
         function library:get_style()
@@ -950,6 +1085,11 @@
                     window_transparency = library.style_state.window_transparency,
                     section_transparency = library.style_state.section_transparency,
                     shadow_transparency = library.style_state.shadow_transparency,
+                    sidebar_search_enabled = library.style_state.sidebar_search_enabled,
+                    notify_side = library.style_state.notify_side,
+                    sidebar_width = library.style_state.sidebar_width,
+                    mobile_button_scale = library.style_state.mobile_button_scale,
+                    show_mobile_buttons = library.style_state.show_mobile_buttons,
                 }
             }
 
@@ -975,11 +1115,21 @@
             library:update_theme_transparency("window", style_settings.window_transparency or 0)
             library:update_theme_transparency("section", style_settings.section_transparency or 0)
             library:update_shadow_transparency(style_settings.shadow_transparency ~= nil and style_settings.shadow_transparency or 1)
+            library.style_state.notify_side = style_settings.notify_side or library.style_state.notify_side
+            library.style_state.sidebar_search_enabled = style_settings.sidebar_search_enabled ~= false
+            library:update_mobile_button_scale(style_settings.mobile_button_scale or 1)
+            library:update_mobile_buttons_visibility(style_settings.show_mobile_buttons ~= false)
+            if library.menu_window and library.menu_window.update_sidebar_search_visibility then
+                library.menu_window.update_sidebar_search_visibility(library.style_state.sidebar_search_enabled)
+            end
+            if library.menu_window and library.menu_window.update_sidebar_width then
+                library.menu_window.update_sidebar_width(style_settings.sidebar_width or library.style_state.sidebar_width or 196)
+            end
         end
 
         function library:save_style(name)
-            local path, sanitize_result = library:get_style_path(name)
-            if not path then
+            local paths, sanitize_result = library:get_style_paths(name)
+            if not paths then
                 return false, sanitize_result
             end
 
@@ -990,23 +1140,22 @@
                 return false, "style encode failed: " .. tostring(payload_result)
             end
 
-            local write_success, write_result = library:write_json_file(path, payload_result)
-            if not write_success then
-                return false, write_result
+            for _, path in ipairs(paths) do
+                local write_success, write_result = library:write_json_file(path, payload_result)
+                if not write_success then
+                    return false, write_result
+                end
             end
 
+            library:debug_config("saved style", sanitize_result, unpack_table(paths))
             library:update_style_list()
 
             return true, sanitize_result
         end
 
         function library:load_style_from_name(name)
-            local path, sanitize_result = library:get_style_path(name)
+            local path, sanitize_result = library:resolve_storage_path(library.directory .. "/styling", name)
             if not path then
-                return false, sanitize_result
-            end
-
-            if not isfile(path) then
                 return false, "style file missing"
             end
 
@@ -1022,26 +1171,34 @@
                 return false, "style decode failed: " .. tostring(load_error)
             end
 
+            library:debug_config("loaded style", sanitize_result, path)
             library:update_style_list()
 
             return true, sanitize_result
         end
 
         function library:delete_style(name)
-            local path, sanitize_result = library:get_style_path(name)
-            if not path then
+            local paths, sanitize_result = library:get_style_paths(name)
+            if not paths then
                 return false, sanitize_result
             end
 
-            if not isfile(path) then
+            local deleted_any = false
+            for _, path in ipairs(paths) do
+                if isfile(path) then
+                    local delete_success, delete_error = library:delete_json_file(path)
+                    if not delete_success then
+                        return false, delete_error
+                    end
+                    deleted_any = true
+                end
+            end
+
+            if not deleted_any then
                 return false, "style file missing"
             end
 
-            local delete_success, delete_error = library:delete_json_file(path)
-            if not delete_success then
-                return false, delete_error
-            end
-
+            library:debug_config("deleted style", sanitize_result)
             library:update_style_list()
 
             return true, sanitize_result
@@ -1123,8 +1280,13 @@
                 end,
                 Load = function(idx, data)
                     local object = library.Options[idx]
-                    if object and object.SetValueRGB and type(data.value) == "string" and data.value ~= "" then
-                        object:SetValueRGB(hex(data.value), data.transparency)
+                    local color_value = library:coerce_color_value(data.value)
+                    if not color_value and type(data.value) == "table" then
+                        color_value = library:coerce_color_value(data.value.Color or data.value)
+                    end
+
+                    if object and object.SetValueRGB and color_value then
+                        object:SetValueRGB(color_value, tonumber(data.transparency) or 0)
                     end
                 end,
             },
@@ -1135,7 +1297,11 @@
                 Load = function(idx, data)
                     local object = library.Options[idx]
                     if object and object.SetValue then
-                        local key_value = type(data.key) == "string" and data.key ~= "NONE" and library:convert_enum(data.key) or data.key
+                        local key_value = data.key
+                        if type(key_value) == "string" and key_value ~= "NONE" and tostring(key_value):find("Enum", 1, true) then
+                            key_value = library:convert_enum(key_value)
+                        end
+
                         object:SetValue({
                             mode = data.mode,
                             key = key_value,
@@ -1194,8 +1360,8 @@
         end
 
         function library:save_config(name)
-            local path, sanitize_result = library:get_config_path(name)
-            if not path then
+            local paths, sanitize_result = library:get_config_paths(name)
+            if not paths then
                 return false, sanitize_result
             end
 
@@ -1206,22 +1372,21 @@
                 return false, "config encode failed: " .. tostring(payload_result)
             end
 
-            local write_success, write_result = library:write_json_file(path, payload_result)
-            if not write_success then
-                return false, write_result
+            for _, path in ipairs(paths) do
+                local write_success, write_result = library:write_json_file(path, payload_result)
+                if not write_success then
+                    return false, write_result
+                end
             end
 
+            library:debug_config("saved config", sanitize_result, "objects", #(http_service:JSONDecode(payload_result).objects or {}), unpack_table(paths))
             library:update_config_list()
             return true, sanitize_result
         end
 
         function library:load_config_from_name(name)
-            local path, sanitize_result = library:get_config_path(name)
+            local path, sanitize_result = library:resolve_storage_path(library:get_place_config_directory(), name)
             if not path then
-                return false, sanitize_result
-            end
-
-            if not isfile(path) then
                 return false, "config file missing"
             end
 
@@ -1232,6 +1397,7 @@
 
             local menu_enabled = library["items"] and library["items"].Enabled
             local selected_tab_data = library.menu_window and library.menu_window.selected_tab_data
+            library:debug_config("loading config", sanitize_result, path)
             local load_success, load_error = pcall(function()
                 library:load_config(read_result)
             end)
@@ -1249,42 +1415,81 @@
                 end)
             end
 
+            library:debug_config("loaded config complete", sanitize_result, path)
             library:update_config_list()
             return true, sanitize_result
         end
 
         function library:delete_config(name)
-            local path, sanitize_result = library:get_config_path(name)
-            if not path then
+            local paths, sanitize_result = library:get_config_paths(name)
+            if not paths then
                 return false, sanitize_result
             end
 
-            if not isfile(path) then
+            local deleted_any = false
+            for _, path in ipairs(paths) do
+                if isfile(path) then
+                    local delete_success, delete_error = library:delete_json_file(path)
+                    if not delete_success then
+                        return false, delete_error
+                    end
+                    deleted_any = true
+                end
+            end
+
+            if not deleted_any then
                 return false, "config file missing"
             end
 
-            local delete_success, delete_error = library:delete_json_file(path)
-            if not delete_success then
-                return false, delete_error
-            end
-
+            library:debug_config("deleted config", sanitize_result)
             library:update_config_list()
             return true, sanitize_result
         end
 
         function library:load_config(config_json) 
             local decoded = http_service:JSONDecode(config_json)
-            local objects = decoded.objects or {}
+            local objects = decoded.objects
 
-            table.sort(objects, function(left_object, right_object)
-                local left_index = find(library.config_loading_order, left_object.type) or math.huge
-                local right_index = find(library.config_loading_order, right_object.type) or math.huge
-                return left_index < right_index
-            end)
+            if typeof(objects) == "table" then
+                table.sort(objects, function(left_object, right_object)
+                    local left_index = find(library.config_loading_order, left_object.type) or math.huge
+                    local right_index = find(library.config_loading_order, right_object.type) or math.huge
+                    return left_index < right_index
+                end)
 
-            for _, object_data in ipairs(objects) do
-                if object_data.type and not library.config_ignore[object_data.idx] and library.config_parser[object_data.type] then
-                    task.spawn(library.config_parser[object_data.type].Load, object_data.idx, object_data)
+                for _, object_data in ipairs(objects) do
+                    if object_data.type and not library.config_ignore[object_data.idx] and library.config_parser[object_data.type] then
+                        library:debug_config("apply object", object_data.type, object_data.idx)
+                        task.spawn(function()
+                            local ok, err = pcall(library.config_parser[object_data.type].Load, object_data.idx, object_data)
+                            if not ok then
+                                library:debug_config("object load failed", object_data.type, object_data.idx, err)
+                            end
+                        end)
+                    else
+                        library:debug_config("skipped object", object_data.type, object_data.idx)
+                    end
+                end
+                return
+            end
+
+            library:debug_config("legacy config detected")
+            for key, value in pairs(decoded) do
+                local function_set = library.config_flags[key]
+                if key ~= "config_name_list" and key ~= "style_name_list" and function_set then
+                    library:debug_config("apply legacy entry", key, typeof(value))
+                    if type(value) == "table" and value["Color"] and value["Transparency"] ~= nil then
+                        local color_value = library:coerce_color_value(value)
+                        if color_value then
+                            function_set(color_value, value["Transparency"])
+                        else
+                            function_set(value)
+                        end
+                    elseif type(value) == "table" and value["mode"] and value["key"] ~= nil then
+                        function_set(value)
+                    else
+                        function_set(value)
+                    end
                 end
             end
         end 
@@ -1411,6 +1616,7 @@
                 size = library:get_window_size(properties);
                 selected_tab;
                 search_entries = {};
+                tabs = {};
                 search_text = "";
                 items = {};
 
@@ -1468,7 +1674,7 @@
                     BackgroundTransparency = 1;
                     Name = "\0";
                     BorderColor3 = rgb(0, 0, 0);
-                    Size = dim2(0, 196, 1, -25);
+                    Size = dim2(0, library.style_state.sidebar_width, 1, -25);
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(14, 14, 16)
                 });
@@ -1487,9 +1693,9 @@
                     Parent = items[ "side_frame" ];
                     Name = "\0";
                     BackgroundTransparency = 1;
-                    Position = dim2(0, 0, 0, 96);
+                    Position = dim2(0, 0, 0, 72);
                     BorderColor3 = rgb(0, 0, 0);
-                    Size = dim2(1, 0, 1, -96);
+                    Size = dim2(1, 0, 1, -72);
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(255, 255, 255)
                 }); cfg.button_holder = items[ "button_holder" ];
@@ -1501,7 +1707,7 @@
                 });
                 
                 library:create( "UIPadding" , {
-                    PaddingTop = dim(0, 16);
+                    PaddingTop = dim(0, 10);
                     PaddingBottom = dim(0, 36);
                     Parent = items[ "button_holder" ];
                     PaddingRight = dim(0, 11);
@@ -1517,11 +1723,11 @@
                     Name = "\0";
                     Text = string.format('<u>%s</u><font color = "rgb(255, 255, 255)">%s</font>', cfg.name, cfg.suffix);
                     BackgroundTransparency = 1;
-                    Size = dim2(1, 0, 0, 70);
+                    Size = dim2(1, 0, 0, 54);
                     TextColor3 = themes.preset.accent;
                     BorderSizePixel = 0;
                     RichText = true;
-                    TextSize = 30;
+                    TextSize = 27;
                     BackgroundColor3 = rgb(255, 255, 255)
                 }); library:apply_theme(items[ "title" ], "accent", "TextColor3");
 
@@ -1534,11 +1740,11 @@
                     Text = "";
                     Parent = items[ "side_frame" ];
                     Name = "\0";
-                    Position = dim2(0, 10, 0, 58);
-                    Size = dim2(1, -20, 0, 28);
+                    Position = dim2(0, 10, 0, 44);
+                    Size = dim2(1, -20, 0, 24);
                     BorderSizePixel = 0;
                     TextXAlignment = Enum.TextXAlignment.Left;
-                    TextSize = 14;
+                    TextSize = 13;
                     ClearTextOnFocus = false;
                     BackgroundColor3 = rgb(22, 22, 24)
                 }); library:apply_theme(items[ "sidebar_search" ], "text", "TextColor3"); items["sidebar_search"].BackgroundTransparency = library.style_state.section_transparency
@@ -1574,9 +1780,9 @@
                     Parent = items[ "main" ];
                     Name = "\0";
                     BackgroundTransparency = 1;
-                    Position = dim2(0, 196, 0, 0);
+                    Position = dim2(0, library.style_state.sidebar_width, 0, 0);
                     BorderColor3 = rgb(0, 0, 0);
-                    Size = dim2(1, -196, 0, 56);
+                    Size = dim2(1, -library.style_state.sidebar_width, 0, 56);
                     ClipsDescendants = true;
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(255, 255, 255)
@@ -1615,9 +1821,9 @@
                     Parent = items[ "main" ];
                     Name = "\0";
                     BackgroundTransparency = 1;
-                    Position = dim2(0, 196, 0, 56);
+                    Position = dim2(0, library.style_state.sidebar_width, 0, 56);
                     BorderColor3 = rgb(0, 0, 0);
-                    Size = dim2(1, -196, 1, -81);
+                    Size = dim2(1, -library.style_state.sidebar_width, 1, -81);
                     BorderSizePixel = 0;
                     BackgroundColor3 = themes.preset.window;
                     ZIndex = 2;
@@ -1722,6 +1928,35 @@
                 end
             end 
 
+            function cfg.update_sidebar_search_visibility(is_enabled)
+                local search_enabled = is_enabled ~= false
+                library.style_state.sidebar_search_enabled = search_enabled
+                items["sidebar_search"].Visible = search_enabled
+                items["button_holder"].Position = dim2(0, 0, 0, search_enabled and 72 or 48)
+                items["button_holder"].Size = dim2(1, 0, 1, search_enabled and -72 or -48)
+            end
+
+            function cfg.update_sidebar_width(value)
+                local sidebar_width = clamp(tonumber(value) or library.style_state.sidebar_width or 196, 160, 240)
+                library.style_state.sidebar_width = sidebar_width
+
+                items["side_frame"].Size = dim2(0, sidebar_width, 1, -25)
+                items["multi_holder"].Position = dim2(0, sidebar_width, 0, 0)
+                items["multi_holder"].Size = dim2(1, -sidebar_width, 0, 56)
+                items["global_fade"].Position = dim2(0, sidebar_width, 0, 56)
+                items["global_fade"].Size = dim2(1, -sidebar_width, 1, -81)
+
+                for _, tab_data in ipairs(cfg.tabs) do
+                    tab_data.items["tab_holder"].Position = dim2(0, sidebar_width, 0, 56)
+                    tab_data.items["tab_holder"].Size = dim2(1, -(sidebar_width + 20), 1, -101)
+                end
+
+                local selected_tab = cfg.selected_tab
+                if selected_tab and selected_tab[4] then
+                    selected_tab[4].Size = dim2(1, -sidebar_width, 1, -81)
+                end
+            end
+
             function cfg.update_sidebar_search(search_text)
                 cfg.search_text = tostring(search_text or ""):lower()
 
@@ -1773,6 +2008,9 @@
                 cfg.update_sidebar_search(items["sidebar_search"].Text)
             end)
 
+            cfg.update_sidebar_search_visibility(library.style_state.sidebar_search_enabled)
+            cfg.update_sidebar_width(library.style_state.sidebar_width)
+
             function cfg.toggle_menu(bool) 
                 -- WIP 
                 -- if cfg.tween then 
@@ -1809,9 +2047,9 @@
                     Name = "\0";
                     Visible = false;
                     BackgroundTransparency = 1;
-                    Position = dim2(0, 196, 0, 56);
+                    Position = dim2(0, library.style_state.sidebar_width, 0, 56);
                     BorderColor3 = rgb(0, 0, 0);
-                    Size = dim2(1, -216, 1, -101);
+                    Size = dim2(1, -(library.style_state.sidebar_width + 20), 1, -101);
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(255, 255, 255)
                 });
@@ -2094,6 +2332,7 @@
             }
             if library.menu_window and library.menu_window.search_entries then
                 table.insert(library.menu_window.search_entries, cfg.search_entry)
+                table.insert(library.menu_window.tabs, cfg)
                 if library.menu_window.update_sidebar_search then
                     library.menu_window.update_sidebar_search(library.menu_window.search_text)
                 end
@@ -2107,7 +2346,7 @@
                         self.items[ "global_fade" ].BackgroundTransparency = 0
                         
                         library:tween(self.items[ "global_fade" ], {BackgroundTransparency = 1}, Enum.EasingStyle.Quad, 0.4)
-                        selected_tab[ 4 ].Size = dim2(1, -216, 1, -101)
+                        selected_tab[ 4 ].Size = dim2(1, -(library.style_state.sidebar_width + 20), 1, -101)
                     end
 
                     library:tween(selected_tab[ 1 ], {BackgroundTransparency = 1})
@@ -2123,7 +2362,7 @@
                 library:tween(items[ "button" ], {BackgroundTransparency = 0})
                 library:tween(items[ "icon" ], {ImageColor3 = themes.preset.accent})
                 library:tween(items[ "name" ], {TextColor3 = rgb(255, 255, 255)})
-                library:tween(items[ "tab_holder" ], {Size = dim2(1, -196, 1, -81)}, Enum.EasingStyle.Quad, 0.4)
+                library:tween(items[ "tab_holder" ], {Size = dim2(1, -library.style_state.sidebar_width, 1, -81)}, Enum.EasingStyle.Quad, 0.4)
                 
                 items[ "tab_holder" ].Visible = true 
                 items[ "tab_holder" ].Parent = self.items[ "main" ]
@@ -5107,9 +5346,21 @@
             styling_manage:textbox({name = "Style name:", flag = "style_name_text"})
             local style_autoload_label = styling_manage:label({name = "autoload: none"})
             styling_manage:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.LeftControl, callback = function(bool) window.toggle_menu(bool) end, default = true})
-            styling_manage:dropdown({name = "Mobile Buttons Side", flag = "mobile_buttons_side", options = {"Left", "Right"}, default = library.MobileButtonsSide, callback = function(value)
+            styling_manage:dropdown({name = "ButtonSide", flag = "mobile_buttons_side", options = {"Left", "Right"}, default = library.MobileButtonsSide, searchable = false, callback = function(value)
                 library.MobileButtonsSide = value
                 library:update_mobile_buttons_side()
+            end})
+            styling_manage:toggle({name = "Mobile Buttons", flag = "style_show_mobile_buttons", default = library.style_state.show_mobile_buttons, callback = function(value)
+                library:update_mobile_buttons_visibility(value)
+            end})
+            styling_manage:dropdown({name = "Notify Side", flag = "style_notify_side", options = {"Left", "Right"}, default = library.style_state.notify_side, searchable = false, callback = function(value)
+                library.style_state.notify_side = value
+            end})
+            styling_manage:toggle({name = "Sidebar Search", flag = "style_sidebar_search", default = library.style_state.sidebar_search_enabled, callback = function(value)
+                library.style_state.sidebar_search_enabled = value
+                if library.menu_window and library.menu_window.update_sidebar_search_visibility then
+                    library.menu_window.update_sidebar_search_visibility(value)
+                end
             end})
             styling_manage:colorpicker({name = "Menu Accent", flag = "style_accent_color", callback = function(color_value, alpha) library:update_theme("accent", color_value) end, color = themes.preset.accent})
             styling_manage:colorpicker({name = "Window Color", flag = "menu_window_color", callback = function(color_value, alpha) library:update_theme("window", color_value) end, color = themes.preset.window})
@@ -5118,6 +5369,14 @@
             styling_manage:colorpicker({name = "Muted Color", flag = "menu_muted_color", callback = function(color_value, alpha) library:update_theme("muted", color_value) end, color = themes.preset.muted})
             styling_manage:slider({name = "Menu Scale", flag = "style_menu_scale", min = 0.7, max = 1.4, default = library.style_state.menu_scale, interval = 0.01, callback = function(value)
                 library:update_menu_scale(value)
+            end})
+            styling_manage:slider({name = "Sidebar Width", flag = "style_sidebar_width", min = 160, max = 240, default = library.style_state.sidebar_width, interval = 1, callback = function(value)
+                if library.menu_window and library.menu_window.update_sidebar_width then
+                    library.menu_window.update_sidebar_width(value)
+                end
+            end})
+            styling_manage:slider({name = "Button Scale", flag = "style_mobile_button_scale", min = 0.8, max = 1.5, default = library.style_state.mobile_button_scale, interval = 0.01, callback = function(value)
+                library:update_mobile_button_scale(value)
             end})
             styling_manage:slider({name = "Window Transparency", flag = "style_window_transparency", min = 0, max = 1, default = library.style_state.window_transparency, interval = 0.01, callback = function(value)
                 library:update_theme_transparency("window", value)
@@ -5209,6 +5468,16 @@
                 library:update_theme("text", rgb(245, 245, 245))
                 library:update_theme("muted", rgb(72, 72, 73))
                 library:update_menu_scale(1)
+                if library.menu_window and library.menu_window.update_sidebar_width then
+                    library.menu_window.update_sidebar_width(196)
+                end
+                library.style_state.notify_side = "Left"
+                library.style_state.sidebar_search_enabled = true
+                if library.menu_window and library.menu_window.update_sidebar_search_visibility then
+                    library.menu_window.update_sidebar_search_visibility(true)
+                end
+                library:update_mobile_button_scale(1)
+                library:update_mobile_buttons_visibility(true)
                 library:update_theme_transparency("window", 0)
                 library:update_theme_transparency("section", 0)
                 library:update_shadow_transparency(1)
@@ -5362,7 +5631,8 @@
             local offset = 50
 
             for i, v in notifications.notifs do
-                local Position = vec2(20, offset)
+                local position_x = library.style_state.notify_side == "Right" and camera.ViewportSize.X - 20 or 20
+                local Position = vec2(position_x, offset)
                 library:tween(v, {Position = dim_offset(Position.X, Position.Y)}, Enum.EasingStyle.Quad, 0.4)
                 offset += (v.AbsoluteSize.Y + 10)
             end
@@ -5409,7 +5679,7 @@
                     BorderColor3 = rgb(0, 0, 0);
                     BorderSizePixel = 0;
                     BackgroundTransparency = 1;
-                    AnchorPoint = vec2(1, 0);
+                    AnchorPoint = library.style_state.notify_side == "Right" and vec2(0, 0) or vec2(1, 0);
                     AutomaticSize = Enum.AutomaticSize.Y;
                     BackgroundColor3 = rgb(14, 14, 16)
                 });
@@ -5494,9 +5764,9 @@
             
             local offset = notifications:refresh_notifs()
 
-            items[ "notification" ].Position = dim_offset(20, offset)
+            items[ "notification" ].Position = dim_offset(library.style_state.notify_side == "Right" and camera.ViewportSize.X - 20 or 20, offset)
 
-            library:tween(items[ "notification" ], {AnchorPoint = vec2(0, 0)}, Enum.EasingStyle.Quad, 1)
+            library:tween(items[ "notification" ], {AnchorPoint = library.style_state.notify_side == "Right" and vec2(1, 0) or vec2(0, 0)}, Enum.EasingStyle.Quad, 1)
             library:tween(items[ "bar" ], {Size = dim2(1, -8, 0, 5)}, Enum.EasingStyle.Quad, cfg.lifetime)
 
             task.spawn(function()
@@ -5506,7 +5776,7 @@
                 
                 notifications:fade(items[ "notification" ], true)
                 
-                library:tween(items[ "notification" ], {AnchorPoint = vec2(1, 0)}, Enum.EasingStyle.Quad, 1)
+                library:tween(items[ "notification" ], {AnchorPoint = library.style_state.notify_side == "Right" and vec2(0, 0) or vec2(1, 0)}, Enum.EasingStyle.Quad, 1)
 
                 task.wait(1)
         
