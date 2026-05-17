@@ -610,7 +610,7 @@
             local start
             local start_pos
 
-            library:connection(helper_holder.InputBegan, function(input)
+            local function begin_helper_drag(input)
                 if not library:is_primary_input(input) then
                     return
                 end
@@ -618,12 +618,36 @@
                 dragging = true
                 start = input.Position
                 start_pos = helper_holder.Position
-            end)
+            end
 
-            library:connection(helper_holder.InputEnded, function(input)
+            local function end_helper_drag(input)
                 if library:is_primary_input(input) then
                     dragging = false
                 end
+            end
+
+            library:connection(helper_holder.InputBegan, function(input)
+                begin_helper_drag(input)
+            end)
+
+            library:connection(helper_holder.InputEnded, function(input)
+                end_helper_drag(input)
+            end)
+
+            library:connection(lock_btn.InputBegan, function(input)
+                begin_helper_drag(input)
+            end)
+
+            library:connection(lock_btn.InputEnded, function(input)
+                end_helper_drag(input)
+            end)
+
+            library:connection(menu_btn.InputBegan, function(input)
+                begin_helper_drag(input)
+            end)
+
+            library:connection(menu_btn.InputEnded, function(input)
+                end_helper_drag(input)
             end)
 
             library:connection(uis.InputChanged, function(input)
