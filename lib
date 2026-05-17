@@ -75,6 +75,8 @@
             "/styling",
         },
         flags = {},
+        Toggles = {},
+        Options = {},
         config_flags = {},
         connections = {},
         style_state = {
@@ -323,6 +325,19 @@
                     Position = dim2(0, 0, 0, 0);
                     ScaleType = Enum.ScaleType.Fit;
                 })
+                library:create("ImageLabel", {
+                    Parent = Frame;
+                    BackgroundTransparency = 1;
+                    BorderSizePixel = 0;
+                    Image = ResizeIcon.Url;
+                    ImageRectOffset = ResizeIcon.ImageRectOffset;
+                    ImageRectSize = ResizeIcon.ImageRectSize;
+                    ImageColor3 = rgb(205, 205, 205);
+                    Size = dim2(1, 1, 1, 1);
+                    Position = dim2(0, 0, 0, uis.TouchEnabled and -10 or -6);
+                    Rotation = 180;
+                    ScaleType = Enum.ScaleType.Fit;
+                })
             else
                 library:create("TextLabel", {
                     Parent = Frame;
@@ -334,6 +349,17 @@
                     TextScaled = true;
                     Size = dim2(1, 1, 1, 1);
                     Position = dim2(0, 0, 0, 0);
+                })
+                library:create("TextLabel", {
+                    Parent = Frame;
+                    BackgroundTransparency = 1;
+                    BorderSizePixel = 0;
+                    Text = "↖";
+                    TextColor3 = rgb(205, 205, 205);
+                    FontFace = fonts.font;
+                    TextScaled = true;
+                    Size = dim2(1, 1, 1, 1);
+                    Position = dim2(0, 0, 0, uis.TouchEnabled and -10 or -6);
                 })
             end
 
@@ -445,6 +471,17 @@
             local x_cond = uiobject.AbsolutePosition.X <= mouse.X and mouse.X <= uiobject.AbsolutePosition.X + uiobject.AbsoluteSize.X
 
             return (y_cond and x_cond)
+        end
+
+        function library:point_in_frame(uiobject, point)
+            if not uiobject or not point then
+                return false
+            end
+
+            local y_cond = uiobject.AbsolutePosition.Y <= point.Y and point.Y <= uiobject.AbsolutePosition.Y + uiobject.AbsoluteSize.Y
+            local x_cond = uiobject.AbsolutePosition.X <= point.X and point.X <= uiobject.AbsolutePosition.X + uiobject.AbsoluteSize.X
+
+            return y_cond and x_cond
         end
 
         function library:is_primary_input(input)
@@ -1022,78 +1059,114 @@
             })
         end
 
-        function library:serialize_config_value(value)
-            if type(value) == "table" and value.key then
-                return {active = value.active, mode = value.mode, key = tostring(value.key)}
-            end
+        library.config_parser = {
+            Toggle = {
+                Save = function(idx, object)
+                    return { type = "Toggle", idx = idx, value = object.Value }
+                end,
+                Load = function(idx, data)
+                    local object = library.Toggles[idx]
+                    if object and object.SetValue and object.Value ~= data.value then
+                        object:SetValue(data.value)
+                    end
+                end,
+            },
+            Slider = {
+                Save = function(idx, object)
+                    return { type = "Slider", idx = idx, value = tostring(object.Value) }
+                end,
+                Load = function(idx, data)
+                    local object = library.Options[idx]
+                    if object and object.SetValue and object.Value ~= data.value then
+                        object:SetValue(data.value)
+                    end
+                end,
+            },
+            Dropdown = {
+                Save = function(idx, object)
+                    return { type = "Dropdown", idx = idx, value = object.Value, multi = object.Multi }
+                end,
+                Load = function(idx, data)
+                    local object = library.Options[idx]
+                    if object and object.SetValue then
+                        object:SetValue(data.value)
+                    end
+                end,
+            },
+            ColorPicker = {
+                Save = function(idx, object)
+                    return { type = "ColorPicker", idx = idx, value = object.Value:ToHex(), transparency = object.Transparency }
+                end,
+                Load = function(idx, data)
+                    local object = library.Options[idx]
+                    if object and object.SetValueRGB and type(data.value) == "string" and data.value ~= "" then
+                        object:SetValueRGB(hex(data.value), data.transparency)
+                    end
+                end,
+            },
+            KeyPicker = {
+                Save = function(idx, object)
+                    return { type = "KeyPicker", idx = idx, mode = object.Mode, key = tostring(object.Value), active = object.Active }
+                end,
+                Load = function(idx, data)
+                    local object = library.Options[idx]
+                    if object and object.SetValue then
+                        local key_value = type(data.key) == "string" and data.key ~= "NONE" and library:convert_enum(data.key) or data.key
+                        object:SetValue({
+                            mode = data.mode,
+                            key = key_value,
+                            active = data.active
+                        })
+                    end
+                end,
+            },
+            Input = {
+                Save = function(idx, object)
+                    return { type = "Input", idx = idx, text = object.Value }
+                end,
+                Load = function(idx, data)
+                    local object = library.Options[idx]
+                    if object and object.SetValue and type(data.text) == "string" and object.Value ~= data.text then
+                        object:SetValue(data.text)
+                    end
+                end,
+            },
+        }
 
-            if type(value) == "table" and value["Transparency"] ~= nil and value["Color"] ~= nil then
-                local color_value = value["Color"]
-                local red, green, blue
+        library.config_loading_order = {
+            "Toggle",
+            "Slider",
+            "Dropdown",
+            "ColorPicker",
+            "KeyPicker",
+            "Input",
+        }
 
-                if typeof(color_value) == "Color3" then
-                    red = math.floor((color_value.R * 255) + 0.5)
-                    green = math.floor((color_value.G * 255) + 0.5)
-                    blue = math.floor((color_value.B * 255) + 0.5)
-                elseif type(color_value) == "table" then
-                    red = tonumber(color_value.R or color_value.r or color_value.Red or color_value.red or color_value[1])
-                    green = tonumber(color_value.G or color_value.g or color_value.Green or color_value.green or color_value[2])
-                    blue = tonumber(color_value.B or color_value.b or color_value.Blue or color_value.blue or color_value[3])
-                end
-
-                local serialized_color = typeof(color_value) == "Color3" and color_value:ToHex() or tostring(color_value)
-                return {
-                    Transparency = tonumber(value["Transparency"]) or 0,
-                    Color = serialized_color,
-                    Red = red,
-                    Green = green,
-                    Blue = blue
-                }
-            end
-
-            return value
-        end
-
-        function library:deserialize_config_color_value(value)
-            if type(value) ~= "table" then
-                return nil, nil
-            end
-
-            local transparency = tonumber(value["Transparency"] or value["transparency"] or value["alpha"]) or 0
-            local color_value = value["Color"] or value["color"]
-
-            if type(color_value) == "string" and color_value ~= "" then
-                local color_success, decoded_color = pcall(hex, color_value)
-                if color_success and typeof(decoded_color) == "Color3" then
-                    return decoded_color, transparency
-                end
-            end
-
-            local red = tonumber(value["Red"] or value["red"] or value["R"] or value["r"] or value[1])
-            local green = tonumber(value["Green"] or value["green"] or value["G"] or value["g"] or value[2])
-            local blue = tonumber(value["Blue"] or value["blue"] or value["B"] or value["b"] or value[3])
-
-            if red and green and blue then
-                if red > 1 or green > 1 or blue > 1 then
-                    red = red / 255
-                    green = green / 255
-                    blue = blue / 255
-                end
-
-                return Color3.new(red, green, blue), transparency
-            end
-
-            return nil, transparency
-        end
+        library.config_ignore = {
+            config_name_list = true,
+            config_name_text = true,
+            style_name_list = true,
+            style_name_text = true,
+        }
 
         function library:get_config()
-            local Config = {}
-            
-            for _, v in next, flags do
-                Config[_] = library:serialize_config_value(v)
-            end 
-            
-            return http_service:JSONEncode(Config)
+            local data = {
+                objects = {}
+            }
+
+            for idx, toggle in pairs(library.Toggles) do
+                if not library.config_ignore[idx] and toggle.Type and library.config_parser[toggle.Type] then
+                    insert(data.objects, library.config_parser[toggle.Type].Save(idx, toggle))
+                end
+            end
+
+            for idx, option in pairs(library.Options) do
+                if not library.config_ignore[idx] and option.Type and library.config_parser[option.Type] then
+                    insert(data.objects, library.config_parser[option.Type].Save(idx, option))
+                end
+            end
+
+            return http_service:JSONEncode(data)
         end
 
         function library:save_config(name)
@@ -1176,26 +1249,20 @@
         end
 
         function library:load_config(config_json) 
-            local config = http_service:JSONDecode(config_json)
-            
-            for _, v in config do 
-                local function_set = library.config_flags[_]
-                
-                if _ == "config_name_list" then 
-                    continue 
-                end
+            local decoded = http_service:JSONDecode(config_json)
+            local objects = decoded.objects or {}
 
-                if function_set then 
-                    local color_value, transparency_value = library:deserialize_config_color_value(v)
-                    if color_value then
-                        function_set(color_value, transparency_value)
-                    elseif type(v) == "table" and v["active"] then 
-                        function_set(v)
-                    else
-                        function_set(v)
-                    end
-                end 
-            end 
+            table.sort(objects, function(left_object, right_object)
+                local left_index = find(library.config_loading_order, left_object.type) or math.huge
+                local right_index = find(library.config_loading_order, right_object.type) or math.huge
+                return left_index < right_index
+            end)
+
+            for _, object_data in ipairs(objects) do
+                if object_data.type and not library.config_ignore[object_data.idx] and library.config_parser[object_data.type] then
+                    task.spawn(library.config_parser[object_data.type].Load, object_data.idx, object_data)
+                end
+            end
         end 
         
         function library:round(number, float) 
@@ -1319,6 +1386,8 @@
                 game_name = properties.gameInfo or properties.game_info or properties.GameInfo or "Milenium for Counter-Strike: Global Offensive";
                 size = library:get_window_size(properties);
                 selected_tab;
+                search_entries = {};
+                search_text = "";
                 items = {};
 
                 tween;
@@ -1394,9 +1463,9 @@
                     Parent = items[ "side_frame" ];
                     Name = "\0";
                     BackgroundTransparency = 1;
-                    Position = dim2(0, 0, 0, 60);
+                    Position = dim2(0, 0, 0, 96);
                     BorderColor3 = rgb(0, 0, 0);
-                    Size = dim2(1, 0, 1, -60);
+                    Size = dim2(1, 0, 1, -96);
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(255, 255, 255)
                 }); cfg.button_holder = items[ "button_holder" ];
@@ -1431,6 +1500,51 @@
                     TextSize = 30;
                     BackgroundColor3 = rgb(255, 255, 255)
                 }); library:apply_theme(items[ "title" ], "accent", "TextColor3");
+
+                items[ "sidebar_search" ] = library:create( "TextBox" , {
+                    FontFace = fonts.small;
+                    TextColor3 = themes.preset.text;
+                    PlaceholderColor3 = rgb(130, 130, 130);
+                    PlaceholderText = "Search tabs...";
+                    BorderColor3 = rgb(0, 0, 0);
+                    Text = "";
+                    Parent = items[ "side_frame" ];
+                    Name = "\0";
+                    Position = dim2(0, 10, 0, 58);
+                    Size = dim2(1, -20, 0, 28);
+                    BorderSizePixel = 0;
+                    TextXAlignment = Enum.TextXAlignment.Left;
+                    TextSize = 14;
+                    ClearTextOnFocus = false;
+                    BackgroundColor3 = rgb(22, 22, 24)
+                }); library:apply_theme(items[ "sidebar_search" ], "text", "TextColor3"); items["sidebar_search"].BackgroundTransparency = library.style_state.section_transparency
+
+                library:create( "UICorner" , {
+                    Parent = items[ "sidebar_search" ];
+                    CornerRadius = dim(0, 6)
+                });
+
+                library:create( "UIPadding" , {
+                    Parent = items[ "sidebar_search" ];
+                    PaddingRight = dim(0, 28);
+                    PaddingLeft = dim(0, 10)
+                });
+
+                local search_icon = library:get_icon("search")
+                if search_icon then
+                    library:create( "ImageLabel" , {
+                        Parent = items[ "sidebar_search" ];
+                        BackgroundTransparency = 1;
+                        BorderSizePixel = 0;
+                        Image = search_icon.Url;
+                        ImageRectOffset = search_icon.ImageRectOffset;
+                        ImageRectSize = search_icon.ImageRectSize;
+                        ImageColor3 = rgb(120, 120, 124);
+                        Position = dim2(1, -22, 0.5, -8);
+                        Size = dim2(0, 16, 0, 16);
+                        BackgroundColor3 = rgb(255, 255, 255)
+                    });
+                end
                 
                 items[ "multi_holder" ] = library:create( "Frame" , {
                     Parent = items[ "main" ];
@@ -1560,7 +1674,80 @@
                 library:connection(camera:GetPropertyChangedSignal("ViewportSize"), function()
                     library:fit_to_viewport(items[ "main" ])
                 end)
+
+                local pinch_active = false
+                local pinch_start_scale = library.style_state.menu_scale
+                if uis.TouchEnabled and uis.TouchPinch then
+                    library:connection(uis.TouchPinch, function(touch_positions, scale, velocity, state)
+                        if not library:point_in_frame(items["main"], touch_positions and touch_positions[1]) then
+                            if state == Enum.UserInputState.Begin then
+                                pinch_active = false
+                            end
+                            return
+                        end
+
+                        if state == Enum.UserInputState.Begin then
+                            pinch_active = true
+                            pinch_start_scale = library.style_state.menu_scale
+                        elseif pinch_active and state == Enum.UserInputState.Change then
+                            library:update_menu_scale(pinch_start_scale * (tonumber(scale) or 1))
+                        elseif state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel then
+                            pinch_active = false
+                        end
+                    end)
+                end
             end 
+
+            function cfg.update_sidebar_search(search_text)
+                cfg.search_text = tostring(search_text or ""):lower()
+
+                local visible_tabs = {}
+                local first_visible_tab = nil
+
+                for _, entry in ipairs(cfg.search_entries) do
+                    if entry.kind == "tab" then
+                        local is_visible = cfg.search_text == "" or string.find(string.lower(entry.text), cfg.search_text, 1, true) ~= nil
+                        entry.object.Visible = is_visible
+                        visible_tabs[entry] = is_visible
+
+                        if is_visible and not first_visible_tab then
+                            first_visible_tab = entry
+                        end
+                    end
+                end
+
+                local current_separator = nil
+                local separator_has_visible_tab = false
+
+                local function apply_separator_visibility()
+                    if not current_separator then
+                        return
+                    end
+
+                    current_separator.object.Visible = separator_has_visible_tab or cfg.search_text == "" or string.find(string.lower(current_separator.text), cfg.search_text, 1, true) ~= nil
+                end
+
+                for _, entry in ipairs(cfg.search_entries) do
+                    if entry.kind == "separator" then
+                        apply_separator_visibility()
+                        current_separator = entry
+                        separator_has_visible_tab = false
+                    elseif entry.kind == "tab" and visible_tabs[entry] then
+                        separator_has_visible_tab = true
+                    end
+                end
+
+                apply_separator_visibility()
+
+                local selected_tab_data = library.menu_window and library.menu_window.selected_tab_data
+                if first_visible_tab and selected_tab_data and not visible_tabs[selected_tab_data.search_entry] then
+                    first_visible_tab.tab.open_tab()
+                end
+            end
+
+            library:connection(items["sidebar_search"]:GetPropertyChangedSignal("Text"), function()
+                cfg.update_sidebar_search(items["sidebar_search"].Text)
+            end)
 
             function cfg.toggle_menu(bool) 
                 -- WIP 
@@ -1875,6 +2062,19 @@
                 --
             end 
 
+            cfg.search_entry = {
+                kind = "tab";
+                text = cfg.name;
+                object = items["button"];
+                tab = cfg;
+            }
+            if library.menu_window and library.menu_window.search_entries then
+                table.insert(library.menu_window.search_entries, cfg.search_entry)
+                if library.menu_window.update_sidebar_search then
+                    library.menu_window.update_sidebar_search(library.menu_window.search_text)
+                end
+            end
+
             function cfg.open_tab() 
                 local selected_tab = self.selected_tab
                 
@@ -1962,6 +2162,17 @@
                     PaddingLeft = dim(0, 5)
                 });                
             end;    
+
+            if library.menu_window and library.menu_window.search_entries then
+                table.insert(library.menu_window.search_entries, {
+                    kind = "separator";
+                    text = cfg.name;
+                    object = items["name"];
+                })
+                if library.menu_window.update_sidebar_search then
+                    library.menu_window.update_sidebar_search(library.menu_window.search_text)
+                end
+            end
 
             return setmetatable(cfg, library)
         end 
@@ -2506,6 +2717,8 @@
             end 
 
             function cfg.set(bool)
+                cfg.enabled = bool
+                cfg.Value = bool
                 cfg.update(bool)
                 cfg.callback(bool)
             end 
@@ -2533,6 +2746,10 @@
             end
 
             cfg.update(cfg.default)
+            cfg.Type = "Toggle"
+            cfg.Value = cfg.default
+            cfg.SetValue = cfg.set
+            library.Toggles[cfg.flag] = cfg
 
             config_flags[cfg.flag] = cfg.set
 
@@ -2718,7 +2935,9 @@
             end 
 
             function cfg.set(value)
+                value = tonumber(value) or cfg.value or cfg.default
                 cfg.value = clamp(library:round(value, cfg.intervals), cfg.min, cfg.max)
+                cfg.Value = cfg.value
 
                 items[ "fill" ].Size = dim2((cfg.value - cfg.min) / (cfg.max - cfg.min), cfg.value == cfg.min and 0 or -4, 0, 2)
                 items[ "value" ].Text = tostring(cfg.value) .. cfg.suffix
@@ -2767,6 +2986,10 @@
             end 
 
             cfg.set(cfg.default)
+            cfg.Type = "Slider"
+            cfg.Value = cfg.value
+            cfg.SetValue = cfg.set
+            library.Options[cfg.flag] = cfg
             config_flags[cfg.flag] = cfg.set
 
             return setmetatable(cfg, library)
@@ -3116,6 +3339,7 @@
 
                 items[ "sub_text" ].Text = isTable and concat(selected, ", ") or selected[1] or ""
                 flags[cfg.flag] = isTable and selected or selected[1]
+                cfg.Value = flags[cfg.flag]
                 
                 cfg.callback(flags[cfg.flag]) 
             end
@@ -3212,6 +3436,11 @@
             end 
 
             flags[cfg.flag] = {} 
+            cfg.Type = "Dropdown"
+            cfg.Multi = cfg.multi
+            cfg.Value = nil
+            cfg.SetValue = cfg.set
+            library.Options[cfg.flag] = cfg
             config_flags[cfg.flag] = cfg.set
             
             cfg.refresh_options(cfg.options)
@@ -3752,6 +3981,8 @@
                     Color = Color;
                     Transparency = a 
                 }
+                cfg.Value = Color
+                cfg.Transparency = a
                 
                 local color_val = items[ "colorpicker" ].BackgroundColor3
                 items[ "input" ].Text = string.format("%s, %s, %s, %s",
@@ -3847,6 +4078,12 @@
             end)
             
             cfg.set(cfg.color, cfg.alpha)
+            cfg.Type = "ColorPicker"
+            cfg.Value = cfg.color
+            cfg.Transparency = cfg.alpha
+            cfg.SetValue = cfg.set
+            cfg.SetValueRGB = cfg.set
+            library.Options[cfg.flag] = cfg
             config_flags[cfg.flag] = cfg.set
 
             return setmetatable(cfg, library)
@@ -3955,6 +4192,7 @@
             
             function cfg.set(text) 
                 flags[cfg.flag] = text
+                cfg.Value = text
 
                 items[ "input" ].Text = text
 
@@ -3976,6 +4214,11 @@
             if cfg.default then 
                 cfg.set(cfg.default) 
             end
+
+            cfg.Type = "Input"
+            cfg.Value = flags[cfg.flag]
+            cfg.SetValue = cfg.set
+            library.Options[cfg.flag] = cfg
 
             config_flags[cfg.flag] = cfg.set
 
@@ -4256,6 +4499,9 @@
                     key = cfg.key, 
                     active = cfg.active
                 }
+                cfg.Value = cfg.key
+                cfg.Mode = cfg.mode
+                cfg.Active = cfg.active
             end
 
             function cfg.set_visible(bool)
@@ -4313,6 +4559,12 @@
             end)
             
             cfg.set({mode = cfg.mode, active = cfg.active, key = cfg.key})           
+            cfg.Type = "KeyPicker"
+            cfg.Value = cfg.key
+            cfg.Mode = cfg.mode
+            cfg.Active = cfg.active
+            cfg.SetValue = cfg.set
+            library.Options[cfg.flag] = cfg
             config_flags[cfg.flag] = cfg.set
 
             return setmetatable(cfg, library)
