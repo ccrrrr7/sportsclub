@@ -1459,7 +1459,6 @@
                 return false, read_error
             end
 
-            library:reset_menu_search()
             library:debug_config("loading config", sanitize_result, path)
             local load_success, load_error = pcall(function()
                 library:load_config(read_result)
@@ -1467,8 +1466,6 @@
             if not load_success then
                 return false, "config decode failed: " .. tostring(load_error)
             end
-
-            library:restore_all_tab_content()
 
             library:debug_config("loaded config complete", sanitize_result, path)
             library:update_config_list()
@@ -1505,6 +1502,8 @@
             local decoded = http_service:JSONDecode(config_json)
             local objects = decoded.objects
 
+            library.config_loading = true
+
             if typeof(objects) == "table" then
                 table.sort(objects, function(left_object, right_object)
                     local left_index = find(library.config_loading_order, left_object.type) or math.huge
@@ -1524,6 +1523,7 @@
                     end
                 end
 
+                library.config_loading = false
                 library:run_config_finalize()
                 return
             end
@@ -1547,6 +1547,9 @@
                     end
                 end
             end
+
+            library.config_loading = false
+            library:run_config_finalize()
         end 
         
         function library:round(number, float) 
@@ -1704,6 +1707,10 @@
         end
 
         function library:apply_tab_content_search(tab_cfg, search_text)
+            if library.config_loading then
+                return
+            end
+
             search_text = tostring(search_text or ""):lower()
 
             if not tab_cfg or not tab_cfg.search_features then
@@ -5700,15 +5707,8 @@
             styling_manage:textbox({name = "Style name:", flag = "style_name_text"})
             local style_autoload_label = styling_manage:label({name = "autoload: none"})
             styling_manage:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.LeftControl, callback = function(bool) window.toggle_menu(bool) end, default = true})
-            styling_manage:dropdown({name = "ButtonSide", flag = "mobile_buttons_side", options = {"Left", "Right"}, default = library.MobileButtonsSide, searchable = false, callback = function(value)
-                library.MobileButtonsSide = value
-                library:update_mobile_buttons_side()
-            end})
             styling_manage:toggle({name = "Mobile Buttons", flag = "style_show_mobile_buttons", default = library.style_state.show_mobile_buttons, callback = function(value)
                 library:update_mobile_buttons_visibility(value)
-            end})
-            styling_manage:dropdown({name = "Notify Side", flag = "style_notify_side", options = {"Left", "Right"}, default = library.style_state.notify_side, searchable = false, callback = function(value)
-                library.style_state.notify_side = value
             end})
             styling_manage:toggle({name = "Sidebar Search", flag = "style_sidebar_search", default = library.style_state.sidebar_search_enabled, callback = function(value)
                 library.style_state.sidebar_search_enabled = value
