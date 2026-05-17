@@ -2903,7 +2903,9 @@
                     ScrollBarImageColor3 = rgb(44, 44, 46);
                     Active = true;
                     AutomaticCanvasSize = Enum.AutomaticSize.Y;
-                    ScrollBarThickness = 2;
+                    ScrollBarThickness = library:is_mobile() and 0 or 2;
+                    ScrollBarImageTransparency = library:is_mobile() and 1 or 0;
+                    ElasticBehavior = library:is_mobile() and Enum.ElasticBehavior.Always or Enum.ElasticBehavior.Never;
                     Parent = items[ "inline" ];
                     Name = "\0";
                     Size = dim2(1, 0, 1, -40);
@@ -3893,8 +3895,10 @@
                         BackgroundTransparency = 1;
                         CanvasSize = dim2(0, 0, 0, 0);
                         AutomaticCanvasSize = Enum.AutomaticSize.Y;
-                        ScrollBarThickness = 3;
+                        ScrollBarThickness = library:is_mobile() and 0 or 3;
+                        ScrollBarImageTransparency = library:is_mobile() and 1 or 0;
                         ScrollBarImageColor3 = themes.preset.accent;
+                        ElasticBehavior = library:is_mobile() and Enum.ElasticBehavior.Always or Enum.ElasticBehavior.Never;
                         ZIndex = 10;
                     }); library:apply_theme(items[ "list_scroller" ], "accent", "ScrollBarImageColor3");
 
