@@ -2365,25 +2365,6 @@
                 Enum.KeyCode.S,
                 Enum.KeyCode.D,
                 Enum.KeyCode.Space,
-                Enum.KeyCode.LeftShift,
-                Enum.KeyCode.LeftControl,
-                Enum.KeyCode.Q,
-                Enum.KeyCode.E,
-                Enum.KeyCode.R,
-                Enum.KeyCode.F,
-                Enum.KeyCode.C,
-                Enum.KeyCode.X,
-                Enum.KeyCode.Z,
-                Enum.KeyCode.One,
-                Enum.KeyCode.Two,
-                Enum.KeyCode.Three,
-                Enum.KeyCode.Four,
-                Enum.KeyCode.Five,
-                Enum.KeyCode.Six,
-                Enum.KeyCode.Seven,
-                Enum.KeyCode.Eight,
-                Enum.KeyCode.Nine,
-                Enum.KeyCode.Zero
             }
 
             function cfg.toggle_menu(bool)
