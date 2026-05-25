@@ -7,24 +7,25 @@
 ]]
 
 -- Variables 
-    local uis = game:GetService("UserInputService") 
-    local players = game:GetService("Players") 
-    local ws = game:GetService("Workspace")
-    local rs = game:GetService("ReplicatedStorage")
-    local http_service = game:GetService("HttpService")
-    local gui_service = game:GetService("GuiService")
-    local lighting = game:GetService("Lighting")
-    local run = game:GetService("RunService")
-    local stats = game:GetService("Stats")
-    local coregui = game:GetService("CoreGui")
-    local debris = game:GetService("Debris")
-    local tween_service = game:GetService("TweenService")
-    local sound_service = game:GetService("SoundService")
+    local uis = cloneref(game:GetService("UserInputService"))
+    local players = cloneref(game:GetService("Players"))
+    local ws = cloneref(game:GetService("Workspace"))
+    local rs = cloneref(game:GetService("ReplicatedStorage"))
+    local http_service = cloneref(game:GetService("HttpService"))
+    local gui_service = cloneref(game:GetService("GuiService"))
+    local lighting = cloneref(game:GetService("Lighting"))
+    local run = cloneref(game:GetService("RunService"))
+    local stats = cloneref(game:GetService("Stats"))
+    local coregui = cloneref(game:GetService("CoreGui"))
+    local debris = cloneref(game:GetService("Debris"))
+    local tween_service = cloneref(game:GetService("TweenService"))
+    local context_action_service = cloneref(game:GetService("ContextActionService"))
+    local sound_service = cloneref(game:GetService("SoundService"))
 
     local vec2 = Vector2.new
     local vec3 = Vector3.new
     local dim2 = UDim2.new
-    local dim = UDim.new 
+    local dim = UDim.new
     local rect = Rect.new
     local cfr = CFrame.new
     local empty_cfr = cfr()
@@ -42,26 +43,26 @@
     local numkey = NumberSequenceKeypoint.new
 
     local camera = ws.CurrentCamera
-    local lp = players.LocalPlayer 
-    local mouse = lp:GetMouse() 
+    local lp = cloneref(players.LocalPlayer)
+    local mouse = cloneref(lp:GetMouse())
     local gui_offset = gui_service:GetGuiInset().Y
 
-    local max = math.max 
-    local floor = math.floor 
-    local min = math.min 
-    local abs = math.abs 
+    local max = math.max
+    local floor = math.floor
+    local min = math.min
+    local abs = math.abs
     local noise = math.noise
-    local rad = math.rad 
-    local random = math.random 
-    local pow = math.pow 
-    local sin = math.sin 
-    local pi = math.pi 
-    local tan = math.tan 
-    local atan2 = math.atan2 
-    local clamp = math.clamp 
+    local rad = math.rad
+    local random = math.random
+    local pow = math.pow
+    local sin = math.sin
+    local pi = math.pi
+    local tan = math.tan
+    local atan2 = math.atan2
+    local clamp = math.clamp
 
-    local insert = table.insert 
-    local find = table.find 
+    local insert = table.insert
+    local find = table.find
     local remove = table.remove
     local concat = table.concat
     local unpack_table = table.unpack or unpack
@@ -2354,19 +2355,77 @@
             cfg.update_sidebar_search_visibility(library.style_state.sidebar_search_enabled)
             cfg.update_sidebar_width(library.style_state.sidebar_width)
 
-            function cfg.toggle_menu(bool) 
-                -- WIP 
-                -- if cfg.tween then 
-                --     cfg.tween:Cancel()
-                -- end 
+            local mouse_unlock_connection = nil
+            local target_game_id = 4293374620
+            local input_block_name = "sportsclub_menu_input_block"
 
-                -- items[ "main" ].Size = dim2(items[ "main" ].Size.Scale.X, items[ "main" ].Size.Offset.X - 20, items[ "main" ].Size.Scale.Y, items[ "main" ].Size.Offset.Y - 20)
-                -- library:tween(items[ "tab_holder" ], {Size = dim2(1, -196, 1, -81)}, Enum.EasingStyle.Quad, 0.4)
-                -- cfg.tween = 
-                
-                library[ "items" ].Enabled = bool
+            local blocked_inputs = {
+                Enum.KeyCode.W,
+                Enum.KeyCode.A,
+                Enum.KeyCode.S,
+                Enum.KeyCode.D,
+                Enum.KeyCode.Space,
+                Enum.KeyCode.LeftShift,
+                Enum.KeyCode.LeftControl,
+                Enum.KeyCode.Q,
+                Enum.KeyCode.E,
+                Enum.KeyCode.R,
+                Enum.KeyCode.F,
+                Enum.KeyCode.C,
+                Enum.KeyCode.X,
+                Enum.KeyCode.Z,
+                Enum.KeyCode.One,
+                Enum.KeyCode.Two,
+                Enum.KeyCode.Three,
+                Enum.KeyCode.Four,
+                Enum.KeyCode.Five,
+                Enum.KeyCode.Six,
+                Enum.KeyCode.Seven,
+                Enum.KeyCode.Eight,
+                Enum.KeyCode.Nine,
+                Enum.KeyCode.Zero
+            }
+
+            function cfg.toggle_menu(bool)
+                library["items"].Enabled = bool
                 library:update_mobile_menu_button()
-            end 
+
+                if game.GameId ~= target_game_id then
+                    return
+                end
+
+                context_action_service:UnbindAction(input_block_name)
+
+                if mouse_unlock_connection then
+                    mouse_unlock_connection:Disconnect()
+                    mouse_unlock_connection = nil
+                end
+
+                if bool == true then
+                    context_action_service:BindActionAtPriority(
+                        input_block_name,
+                        function()
+                            if uis:GetFocusedTextBox() then
+                                return Enum.ContextActionResult.Pass
+                            end
+
+                            return Enum.ContextActionResult.Sink
+                        end,
+                        false,
+                        5000,
+                        table.unpack(blocked_inputs)
+                    )
+
+                    mouse_unlock_connection = run.RenderStepped:Connect(function()
+                        if not library["items"] or library["items"].Enabled ~= true then
+                            return
+                        end
+
+                        uis.MouseBehavior = Enum.MouseBehavior.Default
+                        uis.MouseIconEnabled = true
+                    end)
+                end
+            end
                 
             return setmetatable(cfg, library)
         end 
