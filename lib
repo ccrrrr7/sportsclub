@@ -253,10 +253,14 @@ local fonts = {}; do
 end
 --
 
-    function library:tween(obj, properties, easing_style, time) 
-        local tween = tween_service:Create(obj, TweenInfo.new(time or 0.25, easing_style or Enum.EasingStyle.Quint, Enum.EasingDirection.InOut, 0, false, 0), properties):Play()
-            
-        return tween
+    function library:tween(obj, properties, easing_style, time)
+        if not obj then
+            return
+        end
+        local ok = pcall(function()
+            tween_service:Create(obj, TweenInfo.new(time or 0.25, easing_style or Enum.EasingStyle.Quint, Enum.EasingDirection.InOut, 0, false, 0), properties):Play()
+        end)
+        return ok
     end
 
     function library:is_mobile()
@@ -1752,13 +1756,20 @@ end
     end 
 
     function library:create(instance, options)
-        local ins = Instance.new(instance) 
-        
-        for prop, value in options do 
-            ins[prop] = value
+        local parent = options.Parent
+        local ins = Instance.new(instance)
+
+        for prop, value in options do
+            if prop ~= "Parent" then
+                ins[prop] = value
+            end
         end
-        
-        return ins 
+
+        if parent then
+            ins.Parent = parent
+        end
+
+        return ins
     end
 
     function library:set(instance, property, value)
@@ -4391,7 +4402,7 @@ end
         end 
 
         function cfg.set(text)
-            items[ "name" ].Text = text
+            library:set(items["name"], "Text", text)
         end
 
         if cfg.search_context and cfg.search_context.tab then
@@ -5934,6 +5945,7 @@ end
         local config_manage_section = config_manage_column:section({name = "Settings", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
         config_manage_section:textbox({name = "Config name:", flag = "config_name_text"})
         local config_place_label = config_manage_section:label({name = "game id: " .. tostring(game.GameId)})
+        local config_folder_label = config_manage_section:label({name = "folder: " .. library:get_place_config_directory()})
         local autoload_label = config_manage_section:label({name = "autoload: none"})
 
         config_manage_section:button({name = "Save", callback = function()
@@ -6013,6 +6025,101 @@ end
             safe_clipboard(library:get_place_config_directory(), "Copied config folder")
         end})
 
+        local additional_column = additional_tab:column({})
+        local section_server = additional_column:section({name = "Additional", size = 1, default = true, icon = "rbxassetid://129380150574313"})
+
+        local executor_name = "unknown"
+        pcall(function()
+            executor_name = identifyexecutor and identifyexecutor() or "unknown"
+        end)
+
+        section_server:label({name = "executor: " .. tostring(executor_name)})
+        section_server:label({name = "place id: " .. tostring(game.PlaceId)})
+        section_server:label({name = "game id: " .. tostring(game.GameId)})
+        section_server:label({name = "config folder: " .. library:get_place_config_directory()})
+
+        local server_info_label = section_server:label({name = "players: -"})
+        local uptime_label = section_server:label({name = "uptime: -"})
+        local clock = os.clock
+        local runtime_floor = math.floor
+        local format = string.format
+        local players_service = players
+        local max_players = game.Players.MaxPlayers
+        local start_time = clock()
+        local stat_accumulator = 0
+
+        library:connection(run.Heartbeat, function(delta_time)
+            stat_accumulator += delta_time
+            if stat_accumulator < 1 then
+                return
+            end
+
+            stat_accumulator = 0
+            local player_count = #players_service:GetPlayers()
+            local uptime_secs = runtime_floor(clock() - start_time)
+            local mins = runtime_floor(uptime_secs / 60)
+            local secs = uptime_secs % 60
+
+            server_info_label.set("players: " .. player_count .. "/" .. max_players)
+            uptime_label.set("runtime: " .. format("%02d:%02d", mins, secs))
+        end)
+
+        local server_btns = {
+            {"copy jobid", function() safe_clipboard(game.JobId, "Copied job id") end},
+            {"copy placeid", function() safe_clipboard(tostring(game.PlaceId), "Copied place id") end},
+            {"copy gameid", function() safe_clipboard(tostring(game.GameId), "Copied game id") end},
+            {"copy join script", function()
+                safe_clipboard(('game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)'):format(game.PlaceId, game.JobId), "Copied join script")
+            end},
+            {"rejoin", function()
+                notify_success("Rejoining...")
+                task.wait(0.1)
+                game.Players.LocalPlayer:Kick()
+                game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
+            end},
+        }
+
+        for _, button_data in ipairs(server_btns) do
+            section_server:button({name = button_data[1], callback = button_data[2]})
+        end
+
+        section_server:button({name = "join new server", callback = function()
+            local teleport_service = game:GetService("TeleportService")
+            local ok, response = pcall(function()
+                return game:GetService("HttpService"):JSONDecode(game:HttpGetAsync("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+            end)
+
+            if not ok or not response or not response.data then
+                return notify_error("Failed to fetch servers")
+            end
+
+            local candidates = {}
+            for _, server_data in ipairs(response.data) do
+                if server_data.id ~= game.JobId and server_data.playing >= flags.min_players and server_data.playing <= flags.max_players then
+                    candidates[#candidates + 1] = server_data
+                end
+            end
+
+            if #candidates <= 0 then
+                return notify_error("No matching servers found")
+            end
+
+            notify_success("Joining new server...")
+            task.wait(0.1)
+            game.Players.LocalPlayer:Kick()
+            teleport_service:TeleportToPlaceInstance(game.PlaceId, candidates[random(1, #candidates)].id)
+        end})
+
+        section_server:slider({name = "min players", flag = "min_players", min = 0, max = 40, default = 0, interval = 1})
+        section_server:slider({name = "max players", flag = "max_players", min = 0, max = 40, default = 15, interval = 1})
+        section_server:slider({name = "frames per second", flag = "frames_per_second", min = 30, max = 1000, default = 240, interval = 1, callback = function(value)
+            if setfpscap then
+                setfpscap(value)
+            end
+        end})
+
+
+        local styling_ok, styling_err = pcall(function()
         local styling_column = styling_tab:column({})
         local styling_section = styling_column:section({name = "Styling", size = 1, default = true, icon = "rbxassetid://129380150574313"})
         style_holder = styling_section:list({options = {"Default"}, callback = function(option) end, flag = "style_name_list", searchable = true})
@@ -6157,99 +6264,11 @@ end
         styling_manage:button({name = "Unload Menu", callback = function()
             library:unload_menu()
         end})
-
-        local additional_column = additional_tab:column({})
-        local section_server = additional_column:section({name = "Additional", size = 1, default = true, icon = "rbxassetid://129380150574313"})
-
-        local executor_name = "unknown"
-        pcall(function()
-            executor_name = identifyexecutor and identifyexecutor() or "unknown"
         end)
 
-        section_server:label({name = "executor: " .. tostring(executor_name)})
-        section_server:label({name = "place id: " .. tostring(game.PlaceId)})
-        section_server:label({name = "game id: " .. tostring(game.GameId)})
-        section_server:label({name = "config folder: " .. library:get_place_config_directory()})
-
-        local server_info_label = section_server:label({name = "players: -"})
-        local uptime_label = section_server:label({name = "uptime: -"})
-        local clock = os.clock
-        local runtime_floor = math.floor
-        local format = string.format
-        local players_service = players
-        local max_players = game.Players.MaxPlayers
-        local start_time = clock()
-        local stat_accumulator = 0
-
-        library:connection(run.Heartbeat, function(delta_time)
-            stat_accumulator += delta_time
-            if stat_accumulator < 1 then
-                return
-            end
-
-            stat_accumulator = 0
-            local player_count = #players_service:GetPlayers()
-            local uptime_secs = runtime_floor(clock() - start_time)
-            local mins = runtime_floor(uptime_secs / 60)
-            local secs = uptime_secs % 60
-
-            server_info_label.set("players: " .. player_count .. "/" .. max_players)
-            uptime_label.set("runtime: " .. format("%02d:%02d", mins, secs))
-        end)
-
-        local server_btns = {
-            {"copy jobid", function() safe_clipboard(game.JobId, "Copied job id") end},
-            {"copy placeid", function() safe_clipboard(tostring(game.PlaceId), "Copied place id") end},
-            {"copy gameid", function() safe_clipboard(tostring(game.GameId), "Copied game id") end},
-            {"copy join script", function()
-                safe_clipboard(('game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)'):format(game.PlaceId, game.JobId), "Copied join script")
-            end},
-            {"rejoin", function()
-                notify_success("Rejoining...")
-                task.wait(0.1)
-                game.Players.LocalPlayer:Kick()
-                game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
-            end},
-        }
-
-        for _, button_data in ipairs(server_btns) do
-            section_server:button({name = button_data[1], callback = button_data[2]})
+        if not styling_ok then
+            notify_error(format_error("Styling tab failed to load", styling_err))
         end
-
-        section_server:button({name = "join new server", callback = function()
-            local teleport_service = game:GetService("TeleportService")
-            local ok, response = pcall(function()
-                return game:GetService("HttpService"):JSONDecode(game:HttpGetAsync("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
-            end)
-
-            if not ok or not response or not response.data then
-                return notify_error("Failed to fetch servers")
-            end
-
-            local candidates = {}
-            for _, server_data in ipairs(response.data) do
-                if server_data.id ~= game.JobId and server_data.playing >= flags.min_players and server_data.playing <= flags.max_players then
-                    candidates[#candidates + 1] = server_data
-                end
-            end
-
-            if #candidates <= 0 then
-                return notify_error("No matching servers found")
-            end
-
-            notify_success("Joining new server...")
-            task.wait(0.1)
-            game.Players.LocalPlayer:Kick()
-            teleport_service:TeleportToPlaceInstance(game.PlaceId, candidates[random(1, #candidates)].id)
-        end})
-
-        section_server:slider({name = "min players", flag = "min_players", min = 0, max = 40, default = 0, interval = 1})
-        section_server:slider({name = "max players", flag = "max_players", min = 0, max = 40, default = 15, interval = 1})
-        section_server:slider({name = "frames per second", flag = "frames_per_second", min = 30, max = 1000, default = 240, interval = 1, callback = function(value)
-            if setfpscap then
-                setfpscap(value)
-            end
-        end})
 
         task.spawn(function()
             task.wait(1)
