@@ -1761,6 +1761,17 @@ end
         return ins 
     end
 
+    function library:set(instance, property, value)
+        if not instance then
+            return
+        end
+        task.defer(function()
+            pcall(function()
+                instance[property] = value
+            end)
+        end)
+    end
+
     function library:get_icon(icon_name)
         if library.icon_cache == false then
             return nil
@@ -5316,10 +5327,12 @@ end
         
         function cfg.modify_mode_color(path) -- ts so frikin tuff 💀
             for _, v in cfg.hold_instances do 
-                v.TextColor3 = rgb(72, 72, 72)
+                library:set(v, "TextColor3", rgb(72, 72, 72))
             end 
 
-            cfg.hold_instances[path].TextColor3 = themes.preset.accent
+            if cfg.hold_instances[path] then
+                library:set(cfg.hold_instances[path], "TextColor3", themes.preset.accent)
+            end
         end
 
         function cfg.set_mode(mode) 
@@ -5370,9 +5383,9 @@ end
             cfg.callback(cfg.active)
 
             local text = tostring(cfg.key) ~= "Enums" and (keys[cfg.key] or tostring(cfg.key):gsub("Enum.", "")) or nil
-            local __text = text and (tostring(text):gsub("KeyCode.", ""):gsub("UserInputType.", ""))
+            local __text = text and (tostring(text):gsub("KeyCode.", ""):gsub("UserInputType.", "")) or ""
             
-            items[ "key" ].Text = __text
+            library:set(items[ "key" ], "Text", __text)
 
             flags[cfg.flag] = {
                 mode = cfg.mode,
@@ -5388,15 +5401,21 @@ end
             local size = bool and cfg.y_size or 0
             library:tween(items[ "dropdown" ], {Size = dim_offset(items[ "keybind_holder" ].AbsoluteSize.X, size)})
 
-            items[ "dropdown" ].Position = dim_offset(items[ "keybind_holder" ].AbsolutePosition.X, items[ "keybind_holder" ].AbsolutePosition.Y + items[ "keybind_holder" ].AbsoluteSize.Y + 60)
+            task.defer(function()
+                pcall(function()
+                    items[ "dropdown" ].Position = dim_offset(items[ "keybind_holder" ].AbsolutePosition.X, items[ "keybind_holder" ].AbsolutePosition.Y + items[ "keybind_holder" ].AbsoluteSize.Y + 60)
+                end)
+            end)
         end
     
         library:connection(items[ "keybind_holder" ].MouseButton1Down, function()
             task.wait()
-            items[ "key" ].Text = "..."	
+            library:set(items[ "key" ], "Text", "...")
 
             cfg.binding = library:connection(uis.InputBegan, function(keycode, game_event)  
-                cfg.set(keycode.KeyCode ~= Enum.KeyCode.Unknown and keycode.KeyCode or keycode.UserInputType)
+                task.defer(function()
+                    cfg.set(keycode.KeyCode ~= Enum.KeyCode.Unknown and keycode.KeyCode or keycode.UserInputType)
+                end)
                 
                 cfg.binding:Disconnect() 
                 cfg.binding = nil
@@ -5414,12 +5433,14 @@ end
                 local selected_key = input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode or input.UserInputType
 
                 if selected_key == cfg.key then 
-                    if cfg.mode == "Toggle" then 
-                        cfg.active = not cfg.active
-                        cfg.set(cfg.active)
-                    elseif cfg.mode == "Hold" then 
-                        cfg.set(true)
-                    end
+                    task.defer(function()
+                        if cfg.mode == "Toggle" then 
+                            cfg.active = not cfg.active
+                            cfg.set(cfg.active)
+                        elseif cfg.mode == "Hold" then 
+                            cfg.set(true)
+                        end
+                    end)
                 end
             end
         end)    
@@ -5433,7 +5454,9 @@ end
 
             if selected_key == cfg.key then
                 if cfg.mode == "Hold" then 
-                    cfg.set(false)
+                    task.defer(function()
+                        cfg.set(false)
+                    end)
                 end
             end
         end)
