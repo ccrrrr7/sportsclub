@@ -2402,10 +2402,16 @@ end
         local mouse_restore_connection = nil
         local mouse_state_before_open = nil
         local game_mouse_module = nil
+        local fss_game_id = 4293374620
 
         local function get_game_mouse_module()
             if game_mouse_module ~= nil then
                 return game_mouse_module ~= false and game_mouse_module or nil
+            end
+
+            if game.GameId ~= fss_game_id then
+                game_mouse_module = false
+                return nil
             end
 
             local limited = getgenv().sportsclub
