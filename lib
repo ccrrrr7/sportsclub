@@ -2408,14 +2408,24 @@ end
                 return game_mouse_module ~= false and game_mouse_module or nil
             end
 
-            local ok, module = pcall(function()
-                local shared = rs:FindFirstChild("Shared")
-                local libraries = shared and shared:FindFirstChild("Libraries")
-                local mouse = libraries and libraries:FindFirstChild("Mouse")
-                return mouse and require(mouse) or nil
-            end)
+            local limited = getgenv().sportsclub
+                and getgenv().sportsclub.settings
+                and getgenv().sportsclub.settings.limited_executor
+            if limited then
+                game_mouse_module = false
+                return nil
+            end
 
-            game_mouse_module = ok and module or false
+            local safe_require = getgenv().sportsclub and getgenv().sportsclub.functions and getgenv().sportsclub.functions.SafeRequire
+            local shared = rs:FindFirstChild("Shared")
+            local libraries = shared and shared:FindFirstChild("Libraries")
+            local mouse_script = libraries and libraries:FindFirstChild("Mouse")
+            local module
+            if type(safe_require) == "function" then
+                module = safe_require(mouse_script)
+            end
+
+            game_mouse_module = module or false
             return game_mouse_module ~= false and game_mouse_module or nil
         end
 
