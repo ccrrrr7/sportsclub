@@ -2357,6 +2357,35 @@ end
         local mouse_unlock_connection = nil
         local mouse_restore_connection = nil
         local mouse_state_before_open = nil
+        local game_mouse_module = nil
+
+        local function get_game_mouse_module()
+            if game_mouse_module ~= nil then
+                return game_mouse_module ~= false and game_mouse_module or nil
+            end
+
+            local ok, module = pcall(function()
+                local shared = rs:FindFirstChild("Shared")
+                local libraries = shared and shared:FindFirstChild("Libraries")
+                local mouse = libraries and libraries:FindFirstChild("Mouse")
+                return mouse and require(mouse) or nil
+            end)
+
+            game_mouse_module = ok and module or false
+            return game_mouse_module ~= false and game_mouse_module or nil
+        end
+
+        local function apply_game_menu_mouse(open)
+            local mouse_module = get_game_mouse_module()
+            if mouse_module and mouse_module.SetInterfaceToggle then
+                pcall(mouse_module.SetInterfaceToggle, mouse_module, open == true)
+            end
+        end
+
+        local function apply_menu_mouse_unlock()
+            uis.MouseBehavior = Enum.MouseBehavior.Default
+            uis.MouseIconEnabled = true
+        end
 
         local function apply_saved_mouse(saved)
             if not saved then
@@ -2385,6 +2414,7 @@ end
             local saved = mouse_state_before_open
             mouse_state_before_open = nil
 
+            apply_game_menu_mouse(false)
             apply_saved_mouse(saved)
 
             if not saved then
@@ -2394,7 +2424,7 @@ end
             end
 
             local frames = 0
-            mouse_restore_connection = run.RenderStepped:Connect(function()
+            mouse_restore_connection = run.PreRender:Connect(function()
                 if library["items"] and library["items"].Enabled == true then
                     stop_mouse_connections()
                     return
@@ -2431,15 +2461,15 @@ end
                     }
                 end
 
-                uis.MouseBehavior = Enum.MouseBehavior.Default
-                uis.MouseIconEnabled = true
+                apply_game_menu_mouse(true)
+                apply_menu_mouse_unlock()
 
-                mouse_unlock_connection = run.RenderStepped:Connect(function()
+                mouse_unlock_connection = run.PreRender:Connect(function()
                     if not library["items"] or library["items"].Enabled ~= true then
                         return
                     end
 
-                    uis.MouseBehavior = Enum.MouseBehavior.Default
+                    apply_menu_mouse_unlock()
                 end)
             else
                 restore_menu_mouse()
