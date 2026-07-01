@@ -17,6 +17,15 @@ local lighting = cloneref(game:GetService("Lighting"))
 local run = cloneref(game:GetService("RunService"))
 local stats = cloneref(game:GetService("Stats"))
 local coregui = cloneref(game:GetService("CoreGui"))
+local function get_gui_parent()
+    if type(gethui) == "function" then
+        local ok, result = pcall(gethui)
+        if ok and typeof(result) == "Instance" then
+            return result
+        end
+    end
+    return coregui
+end
 local debris = cloneref(game:GetService("Debris"))
 local tween_service = cloneref(game:GetService("TweenService"))
 local sound_service = cloneref(game:GetService("SoundService"))
@@ -587,7 +596,7 @@ end
 
         local sg = library:create("ScreenGui", {
             Name = "size_lock_gui";
-            Parent = coregui;
+            Parent = get_gui_parent();
             IgnoreGuiInset = true;
             ResetOnSpawn = false;
             ZIndexBehavior = Enum.ZIndexBehavior.Global;
@@ -1960,7 +1969,7 @@ end
         library.menu_window = cfg
         
         library[ "items" ] = library:create( "ScreenGui" , {
-            Parent = coregui;
+            Parent = get_gui_parent();
             Name = "\0";
             Enabled = true;
             ZIndexBehavior = Enum.ZIndexBehavior.Global;
@@ -1968,12 +1977,22 @@ end
         });
         
         library[ "other" ] = library:create( "ScreenGui" , {
-            Parent = coregui;
+            Parent = get_gui_parent();
             Name = "\0";
             Enabled = false;
             ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
             IgnoreGuiInset = true;
-        }); 
+        });
+
+        library[ "notifications_gui" ] = library:create("ScreenGui", {
+            Parent = get_gui_parent();
+            Name = "sportsclub_notifications";
+            Enabled = true;
+            ResetOnSpawn = false;
+            ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
+            IgnoreGuiInset = true;
+            DisplayOrder = 100000;
+        });
 
         local items = cfg.items; do
             items[ "main" ] = library:create( "Frame" , {
@@ -1984,7 +2003,10 @@ end
                 BorderColor3 = rgb(0, 0, 0);
                 BorderSizePixel = 0;
                 BackgroundColor3 = themes.preset.window
-            }); library:apply_theme(items[ "main" ], "window", "BackgroundColor3"); items[ "main" ].Position = dim2(0, items[ "main" ].AbsolutePosition.X, 0, items[ "main" ].AbsolutePosition.Y)
+            }); library:apply_theme(items[ "main" ], "window", "BackgroundColor3")
+            pcall(function()
+                items[ "main" ].Position = dim2(0, items[ "main" ].AbsolutePosition.X, 0, items[ "main" ].AbsolutePosition.Y)
+            end)
             items["main"].BackgroundTransparency = library.style_state.window_transparency
             if library:is_mobile() and (library.style_state.menu_scale or 1) >= 0.95 then
                 library.style_state.menu_scale = 0.85
@@ -5871,6 +5893,7 @@ end
     end 
 
     function library:init_config(window)
+        local ok, err = pcall(function()
         window:seperator({name = "Settings"})
         local main, styling_tab, additional_tab = window:tab({name = "Configurations", tabs = {"Main", "Styling", "Additional"}})
 
@@ -6312,6 +6335,10 @@ end
                 config_place_label.set("place id: " .. tostring(game.PlaceId))
             end)
         end)
+        end)
+        if not ok then
+            warn("[sportsclub] init_config failed:", err)
+        end
     end
 --
 
@@ -6362,7 +6389,7 @@ end
 
         local items = cfg.items; do 
             items[ "notification" ] = library:create( "Frame" , {
-                Parent = library[ "items" ];
+                Parent = library["notifications_gui"] or library[ "items" ];
                 Size = dim2(0, 210, 0, 53);
                 Name = "\0";
                 BorderColor3 = rgb(0, 0, 0);
