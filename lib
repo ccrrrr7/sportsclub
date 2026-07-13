@@ -775,6 +775,8 @@ end
 
             if library.menu_window and library.menu_window.toggle_menu then
                 library.menu_window.toggle_menu(next_state)
+            elseif library.toggle_menu then
+                library:toggle_menu(next_state)
             elseif library[ "items" ] then
                 library[ "items" ].Enabled = next_state
                 library:update_mobile_menu_button()
@@ -1868,6 +1870,10 @@ end
     function library:unload_menu()
         library.unloading = true
 
+        if library.cleanup_menu_mouse then
+            pcall(library.cleanup_menu_mouse)
+        end
+
         for index, connection in library.connections do
             pcall(function()
                 connection:Disconnect()
@@ -2448,142 +2454,188 @@ end
         cfg.update_sidebar_search_visibility(library.style_state.sidebar_search_enabled)
         cfg.update_sidebar_width(library.style_state.sidebar_width)
 
-        local mouse_unlock_connection = nil
-        local mouse_restore_connection = nil
-        local mouse_state_before_open = nil
-        local game_mouse_module = nil
         local fss_game_id = 4293374620
+        local is_fss = game.GameId == fss_game_id
 
-        local function get_game_mouse_module()
-            if game_mouse_module ~= nil then
+        if is_fss then
+            local mouse_unlock_connection = nil
+            local mouse_restore_connection = nil
+            local mouse_state_before_open = nil
+            local game_mouse_module = nil
+            local mouse_enabled_watch = nil
+            local applying_menu_visibility = false
+
+            local function normalize_mouse_behavior(behavior)
+                if behavior == Enum.MouseBehavior.LockCurrentPosition then
+                    return Enum.MouseBehavior.LockCenter
+                end
+                return behavior or Enum.MouseBehavior.Default
+            end
+
+            local function get_game_mouse_module()
+                if game_mouse_module ~= nil then
+                    return game_mouse_module ~= false and game_mouse_module or nil
+                end
+
+                local limited = getgenv().sportsclub
+                    and getgenv().sportsclub.settings
+                    and getgenv().sportsclub.settings.limited_executor
+                if limited then
+                    game_mouse_module = false
+                    return nil
+                end
+
+                local safe_require = getgenv().sportsclub and getgenv().sportsclub.functions and getgenv().sportsclub.functions.SafeRequire
+                local shared = rs:FindFirstChild("Shared")
+                local libraries = shared and shared:FindFirstChild("Libraries")
+                local mouse_script = libraries and libraries:FindFirstChild("Mouse")
+                local module
+                if type(safe_require) == "function" then
+                    module = safe_require(mouse_script)
+                end
+
+                game_mouse_module = module or false
                 return game_mouse_module ~= false and game_mouse_module or nil
             end
 
-            if game.GameId ~= fss_game_id then
-                game_mouse_module = false
-                return nil
+            local function apply_game_menu_mouse(open)
+                local mouse_module = get_game_mouse_module()
+                if mouse_module and mouse_module.SetInterfaceToggle then
+                    pcall(mouse_module.SetInterfaceToggle, mouse_module, open == true)
+                end
             end
 
-            local limited = getgenv().sportsclub
-                and getgenv().sportsclub.settings
-                and getgenv().sportsclub.settings.limited_executor
-            if limited then
-                game_mouse_module = false
-                return nil
-            end
-
-            local safe_require = getgenv().sportsclub and getgenv().sportsclub.functions and getgenv().sportsclub.functions.SafeRequire
-            local shared = rs:FindFirstChild("Shared")
-            local libraries = shared and shared:FindFirstChild("Libraries")
-            local mouse_script = libraries and libraries:FindFirstChild("Mouse")
-            local module
-            if type(safe_require) == "function" then
-                module = safe_require(mouse_script)
-            end
-
-            game_mouse_module = module or false
-            return game_mouse_module ~= false and game_mouse_module or nil
-        end
-
-        local function apply_game_menu_mouse(open)
-            local mouse_module = get_game_mouse_module()
-            if mouse_module and mouse_module.SetInterfaceToggle then
-                pcall(mouse_module.SetInterfaceToggle, mouse_module, open == true)
-            end
-        end
-
-        local function apply_menu_mouse_unlock()
-            uis.MouseBehavior = Enum.MouseBehavior.Default
-            uis.MouseIconEnabled = true
-        end
-
-        local function apply_saved_mouse(saved)
-            if not saved then
-                return
-            end
-
-            uis.MouseBehavior = saved.MouseBehavior or Enum.MouseBehavior.Default
-            uis.MouseIconEnabled = saved.MouseIconEnabled ~= false
-        end
-
-        local function stop_mouse_connections()
-            if mouse_unlock_connection then
-                mouse_unlock_connection:Disconnect()
-                mouse_unlock_connection = nil
-            end
-
-            if mouse_restore_connection then
-                mouse_restore_connection:Disconnect()
-                mouse_restore_connection = nil
-            end
-        end
-
-        local function restore_menu_mouse()
-            stop_mouse_connections()
-
-            local saved = mouse_state_before_open
-            mouse_state_before_open = nil
-
-            apply_game_menu_mouse(false)
-            apply_saved_mouse(saved)
-
-            if not saved then
+            local function apply_menu_mouse_unlock()
                 uis.MouseBehavior = Enum.MouseBehavior.Default
                 uis.MouseIconEnabled = true
-                return
             end
 
-            local frames = 0
-            mouse_restore_connection = run.PreRender:Connect(function()
-                if library["items"] and library["items"].Enabled == true then
-                    stop_mouse_connections()
+            local function apply_saved_mouse(saved)
+                if not saved then
+                    apply_menu_mouse_unlock()
                     return
                 end
 
-                apply_saved_mouse(saved)
-                frames += 1
+                uis.MouseBehavior = normalize_mouse_behavior(saved.MouseBehavior)
+                uis.MouseIconEnabled = saved.MouseIconEnabled ~= false
+            end
 
-                if frames >= 8 then
-                    stop_mouse_connections()
-                end
-            end)
-
-            task.defer(function()
-                if library["items"] and library["items"].Enabled == true then
-                    return
+            local function stop_mouse_connections()
+                if mouse_unlock_connection then
+                    mouse_unlock_connection:Disconnect()
+                    mouse_unlock_connection = nil
                 end
 
-                apply_saved_mouse(saved)
-            end)
-        end
+                if mouse_restore_connection then
+                    mouse_restore_connection:Disconnect()
+                    mouse_restore_connection = nil
+                end
+            end
 
-        function cfg.toggle_menu(bool)
-            library["items"].Enabled = bool
-            library:update_mobile_menu_button()
-
-            if bool == true then
+            local function restore_menu_mouse()
                 stop_mouse_connections()
 
-                if not mouse_state_before_open then
-                    mouse_state_before_open = {
-                        MouseBehavior = uis.MouseBehavior,
-                        MouseIconEnabled = uis.MouseIconEnabled,
-                    }
-                end
+                local saved = mouse_state_before_open
+                mouse_state_before_open = nil
 
-                apply_game_menu_mouse(true)
+                apply_game_menu_mouse(false)
                 apply_menu_mouse_unlock()
 
-                mouse_unlock_connection = run.PreRender:Connect(function()
-                    if not library["items"] or library["items"].Enabled ~= true then
+                if not saved then
+                    return
+                end
+
+                local frames = 0
+                mouse_restore_connection = run.PreRender:Connect(function()
+                    if not library or library.unloading or (library["items"] and library["items"].Enabled == true) then
+                        stop_mouse_connections()
                         return
                     end
 
-                    apply_menu_mouse_unlock()
+                    apply_saved_mouse(saved)
+                    frames += 1
+
+                    if frames >= 12 then
+                        stop_mouse_connections()
+                    end
                 end)
-            else
-                restore_menu_mouse()
+
+                task.defer(function()
+                    if not library or library.unloading or (library["items"] and library["items"].Enabled == true) then
+                        return
+                    end
+                    apply_saved_mouse(saved)
+                end)
             end
+
+            function cfg.toggle_menu(bool)
+                if applying_menu_visibility then
+                    return
+                end
+
+                applying_menu_visibility = true
+                library["items"].Enabled = bool
+                library:update_mobile_menu_button()
+
+                if bool == true then
+                    stop_mouse_connections()
+
+                    mouse_state_before_open = {
+                        MouseBehavior = normalize_mouse_behavior(uis.MouseBehavior),
+                        MouseIconEnabled = uis.MouseIconEnabled,
+                    }
+
+                    apply_game_menu_mouse(true)
+                    apply_menu_mouse_unlock()
+
+                    mouse_unlock_connection = run.PreRender:Connect(function()
+                        if not library or not library["items"] or library["items"].Enabled ~= true then
+                            return
+                        end
+
+                        apply_menu_mouse_unlock()
+                    end)
+                else
+                    restore_menu_mouse()
+                end
+
+                applying_menu_visibility = false
+            end
+
+            library.cleanup_menu_mouse = function()
+                stop_mouse_connections()
+                mouse_state_before_open = nil
+                apply_game_menu_mouse(false)
+                apply_menu_mouse_unlock()
+            end
+
+            if not mouse_enabled_watch and library["items"] then
+                mouse_enabled_watch = library["items"]:GetPropertyChangedSignal("Enabled"):Connect(function()
+                    if applying_menu_visibility or library.unloading then
+                        return
+                    end
+
+                    local enabled = library["items"].Enabled == true
+                    if enabled then
+                        if not mouse_unlock_connection then
+                            cfg.toggle_menu(true)
+                        end
+                    elseif mouse_unlock_connection or mouse_state_before_open then
+                        restore_menu_mouse()
+                    end
+                end)
+                insert(library.connections, mouse_enabled_watch)
+            end
+        else
+            function cfg.toggle_menu(bool)
+                library["items"].Enabled = bool
+                library:update_mobile_menu_button()
+            end
+        end
+
+        library.menu_window = cfg
+        library.toggle_menu = function(_, bool)
+            cfg.toggle_menu(bool)
         end
 
         return setmetatable(cfg, library)
