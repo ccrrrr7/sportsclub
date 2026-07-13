@@ -274,13 +274,17 @@ end
 
         if set_id and get_id then
             local old_identity = get_id()
-            set_id(8)
-            local packed = table.pack(pcall(callback, ...))
-            pcall(set_id, old_identity)
-            if not packed[1] then
-                return false, packed[2]
+            local identities = {8, 7, 6}
+            for i = 1, #identities do
+                set_id(identities[i])
+                local packed = table.pack(pcall(callback, ...))
+                if packed[1] then
+                    pcall(set_id, old_identity)
+                    return true, table.unpack(packed, 2, packed.n)
+                end
             end
-            return true, table.unpack(packed, 2, packed.n)
+            pcall(set_id, old_identity)
+            return false
         end
 
         return pcall(callback, ...)
@@ -364,7 +368,9 @@ end
         Frame.BorderSizePixel = 0
         Frame.BackgroundColor3 = rgb(255, 255, 255)
         Frame.AutoButtonColor = false
-        Frame.Parent = frame
+        library:run_with_instance_access(function()
+            Frame.Parent = frame
+        end)
         Frame.BackgroundTransparency = 1
         Frame.Text = ""
         Frame.ZIndex = frame.ZIndex + 1000
@@ -1814,7 +1820,14 @@ end
         end
 
         if parent then
-            ins.Parent = parent
+            local ok = library:run_with_instance_access(function()
+                ins.Parent = parent
+            end)
+            if not ok then
+                pcall(function()
+                    ins.Parent = parent
+                end)
+            end
         end
 
         return ins
@@ -2841,7 +2854,9 @@ end
                             library:tween(page.button, {BackgroundTransparency = 1})
 
                             page.page.Visible = false
-                            page.page.Parent = library[ "cache" ]
+                            library:run_with_instance_access(function()
+                                page.page.Parent = library[ "cache" ]
+                            end)
                         end
 
                         library:tween(data.text, {TextColor3 = rgb(255, 255, 255)})
@@ -2850,7 +2865,9 @@ end
                         library:tween(data.page, {Size = dim2(1, 0, 1, 0)}, Enum.EasingStyle.Quad, 0.4)
 
                         data.page.Visible = true
-                        data.page.Parent = items["tab_holder"]
+                        library:run_with_instance_access(function()
+                            data.page.Parent = items["tab_holder"]
+                        end)
 
                         cfg.current_multi = data
 
@@ -2899,9 +2916,11 @@ end
                 library:tween(selected_tab[ 3 ], {TextColor3 = rgb(72, 72, 73)})
 
                 selected_tab[ 4 ].Visible = false
-                selected_tab[ 4 ].Parent = library[ "cache" ]
+                library:run_with_instance_access(function()
+                    selected_tab[ 4 ].Parent = library[ "cache" ]
+                    selected_tab[ 5 ].Parent = library[ "cache" ]
+                end)
                 selected_tab[ 5 ].Visible = false
-                selected_tab[ 5 ].Parent = library[ "cache" ]
             end
 
             library:tween(items[ "button" ], {BackgroundTransparency = 0})
@@ -2910,9 +2929,11 @@ end
             library:tween(items[ "tab_holder" ], {Size = dim2(1, -library.style_state.sidebar_width, 1, -81)}, Enum.EasingStyle.Quad, 0.4)
 
             items[ "tab_holder" ].Visible = true
-            items[ "tab_holder" ].Parent = self.items[ "main" ]
+            library:run_with_instance_access(function()
+                items[ "tab_holder" ].Parent = self.items[ "main" ]
+                items[ "multi_section_button_holder" ].Parent = self.items[ "multi_holder" ]
+            end)
             items[ "multi_section_button_holder" ].Visible = true
-            items[ "multi_section_button_holder" ].Parent = self.items[ "multi_holder" ]
             items[ "multi_section_button_holder" ].CanvasPosition = vec2(0, 0)
 
             self.selected_tab = {
@@ -4839,7 +4860,9 @@ end
 
         function cfg.set_visible(bool)
             items[ "colorpicker_fade" ].BackgroundTransparency = 0
-            items[ "colorpicker_holder" ].Parent = bool and library[ "items" ] or library[ "other" ]
+            library:run_with_instance_access(function()
+                items[ "colorpicker_holder" ].Parent = bool and library[ "items" ] or library[ "other" ]
+            end)
             items[ "colorpicker_holder" ].Position = dim_offset(items[ "colorpicker" ].AbsolutePosition.X, items[ "colorpicker" ].AbsolutePosition.Y + items[ "colorpicker" ].AbsoluteSize.Y + 45)
 
             library:tween(items[ "colorpicker_fade" ], {BackgroundTransparency = 1}, Enum.EasingStyle.Quad, 0.4)
